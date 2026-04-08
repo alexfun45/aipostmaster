@@ -3,7 +3,8 @@ import 'dotenv/config'
 import telegraf from 'telegraf';
 import { Redis } from '@telegraf/session/redis';
 import { initRedis } from './services/redis.service.ts';
-import type {BotState, botSession, botContext} from './types/types.ts'
+import {BotState} from './types/types.ts'
+import type { botSession, botContext } from './types/types.js';
 
 const { Telegraf, Markup, session } = telegraf;
 const STATES = {
@@ -26,9 +27,9 @@ const getPlatformMenu = () => {
 };
 
 const connectedClient = await initRedis(); 
-  const store = Redis({
-    connectedClient
-    }
+const store = Redis({
+    client: connectedClient
+    } 
   );
 
 const bot = new Telegraf<botContext>(process?.env?.TELEGRAM_BOT_TOKEN || "");
@@ -36,8 +37,8 @@ const bot = new Telegraf<botContext>(process?.env?.TELEGRAM_BOT_TOKEN || "");
 bot.start((ctx) => ctx.reply("Добро пожаловать в ИИ-бот автопостинга", getMainMenu()));
 
 bot.hears('📝 Создать пост', async (ctx: botContext) => {
-  //ctx.session.state = BotState.AWAITING_POST_TEXT;
-  //ctx.session.draft = { platform: 'TG' };
+  ctx.session.state = BotState.AWAITING_POST_TEXT;
+  ctx.session.draft = { platform: 'TG' };
   await ctx.reply('Введите текст поста (или отправьте идею, а я её адаптирую):');
 });
 

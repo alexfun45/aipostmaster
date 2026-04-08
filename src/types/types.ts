@@ -1,9 +1,9 @@
 import {Context} from 'telegraf'
 
-export enum SocialPlatform {
-  TELEGRAM = 'tg',
-  VK = 'vk',
-  INSTAGRAM = 'inst'
+export interface SocialPlatform {
+  'TELEGRAM': 'tg',
+  'VK': 'vk',
+  'INSTAGRAM': 'inst'
 }
 
 export interface PostContent {
@@ -16,13 +16,13 @@ export interface IPoster {
   post(content: PostContent): Promise<boolean>;
 }
 
-export enum BotState {
-  IDLE = 'IDLE',
-  AWAITING_CHANNEL_ID = 'AWAITING_CHANNEL_ID',
-  AWAITING_POST_TEXT = 'AWAITING_POST_TEXT',
-  AWAITING_POST_IMAGE = 'AWAITING_POST_IMAGE',
-  AWAITING_SCHEDULE = 'AWAITING_SCHEDULE'
-}
+export const BotState = {
+  IDLE: 'IDLE',
+  AWAITING_CHANNEL_ID: 'AWAITING_CHANNEL_ID',
+  AWAITING_POST_TEXT: 'AWAITING_POST_TEXT',
+  AWAITING_POST_IMAGE: 'AWAITING_POST_IMAGE',
+  AWAITING_SCHEDULE: 'AWAITING_SCHEDULE' 
+} as const
 
 export interface PostDraft {
   text?: string;
@@ -33,16 +33,17 @@ export interface PostDraft {
   publishTime?: string;
 }
 
+type typeBotState = typeof BotState[keyof typeof BotState];
 
 export interface botContext extends Context {
   session: {
-    state: BotState;
+    state: typeBotState;
     draft?: PostDraft;
   }
 }
 
 export interface botSession {
-  state: BotState;
+  state: typeBotState;
   draft?: {
     platform: string;
     text?: string;
