@@ -42,5 +42,11 @@ bot.hears('📝 Создать пост', async (ctx: botContext) => {
   await ctx.reply('Введите текст поста (или отправьте идею, а я её адаптирую):');
 });
 
+bot.hears('⚙️ Настроить площадки', setup);
+
 bot.launch();
+
+function setup(ctx: botContext){
+  
+}
 

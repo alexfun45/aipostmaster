@@ -1,9 +1,18 @@
 import {Context} from 'telegraf'
 
-export interface SocialPlatform {
-  'TELEGRAM': 'tg',
-  'VK': 'vk',
-  'INSTAGRAM': 'inst'
+export const AvailableSocialPlatform = {
+  TELEGRAM: 'TELEGRAM',
+  VK: 'VK',
+  INSTAGRAM: 'INSTAGRAM'
+} as const;
+
+
+export type SocialPlatform = 'TELEGRAM' | 'VK' | 'INSTAGRAM';
+
+//export type SocialPlatformType = typeof AvailableSocialPlatform[keyof typeof AvailableSocialPlatform];
+
+export interface SocialPlatformType{
+  [AvailableSocialPlatform: string]: string
 }
 
 export interface PostContent {

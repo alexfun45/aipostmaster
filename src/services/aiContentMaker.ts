@@ -1,7 +1,8 @@
 import 'dotenv/config'
 import { ChatOpenAI } from "@langchain/openai"
 import { PromptTemplate } from '@langchain/core/prompts'
-import {SocialPlatform} from '../types/types.ts'
+import {AvailableSocialPlatform, SocialPlatform} from '../types/types.ts'
+import type {SocialPlatformType} from '../types/types.ts'
 
 
 export class AIContentService {
@@ -26,10 +27,10 @@ export class AIContentService {
 
   async adaptContent(originalText: string, platform: SocialPlatform): Promise<string> {
 
-    const prompts = {
-      [SocialPlatform.TELEGRAM]: "Сделай пост структурированным, используй эмодзи и Markdown.",
-      [SocialPlatform.VK]: "Напиши пост в дружелюбном стиле, добавь призыв к обсуждению.",
-      [SocialPlatform.INSTAGRAM]: "Сделай текст коротким, ярким, добавь 5-10 релевантных хештегов."
+    const prompts: SocialPlatformType = {
+      [AvailableSocialPlatform.TELEGRAM]: "Сделай пост структурированным, используй эмодзи и Markdown.",
+      [AvailableSocialPlatform.VK]: "Напиши пост в дружелюбном стиле, добавь призыв к обсуждению.",
+      [AvailableSocialPlatform.INSTAGRAM]: "Сделай текст коротким, ярким, добавь 5-10 релевантных хештегов."
     };
 
     const template = PromptTemplate.fromTemplate(
