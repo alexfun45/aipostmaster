@@ -22,6 +22,42 @@ async function startEditPost(ctx: botContext){
   await ctx.reply('Пришлите текст поста или просто идею, а я помогу её оформить. ✨');
 }
 
+postModule.hears('📊 Активные рассылки', async (ctx) => {
+  const tasks = ctx.session.activeTasks || [];
+  
+  // Фильтруем только те, что еще не выполнены или цикличны
+  const pendingTasks = tasks.filter(t => t.status === 'PENDING');
+
+  if (pendingTasks.length === 0) {
+    return ctx.reply('У вас пока нет активных запланированных рассылок. Создайте новый пост!');
+  }
+
+  await ctx.reply('📋 Ваши активные рассылки:');
+
+  for (const task of pendingTasks) {
+    const dateStr = new Date(task.scheduledAt).toLocaleString('ru-RU');
+    const platforms = task.results.map((r: any) => r.type).join(', ');
+    
+    // Короткое превью текста
+    const preview = task.results[0].content.substring(0, 50) + '...';
+
+    const messageText = `🆔 *Задача:* \`${task.id}\`\n` +
+                        `📅 *Старт:* ${dateStr}\n` +
+                        `🔁 *Тип:* ${task.frequency}\n` +
+                        `🌐 *Площадки:* ${platforms}\n` +
+                        `📝 *Текст:* _${preview}_`;
+
+    const keyboard = Markup.inlineKeyboard([
+      [
+        Markup.button.callback('🛑 Остановить/Удалить', `delete_task_${task.id}`),
+        // Можно добавить кнопку "Изменить время", если захочешь позже
+      ]
+    ]);
+
+    await ctx.reply(messageText, { parse_mode: 'Markdown', ...keyboard });
+  }
+});
+
 const getFrequencyMenu = () => {
   return Markup.inlineKeyboard([
     [Markup.button.callback('🎯 Единоразово', 'freq_ONCE')],
@@ -299,41 +335,7 @@ postModule.on('message', async (ctx, next) => {
 
 });
 
-postModule.hears('📊 Активные рассылки', async (ctx) => {
-  const tasks = ctx.session.activeTasks || [];
-  
-  // Фильтруем только те, что еще не выполнены или цикличны
-  const pendingTasks = tasks.filter(t => t.status === 'PENDING');
 
-  if (pendingTasks.length === 0) {
-    return ctx.reply('У вас пока нет активных запланированных рассылок. Создайте новый пост!');
-  }
-
-  await ctx.reply('📋 Ваши активные рассылки:');
-
-  for (const task of pendingTasks) {
-    const dateStr = new Date(task.scheduledAt).toLocaleString('ru-RU');
-    const platforms = task.results.map((r: any) => r.type).join(', ');
-    
-    // Короткое превью текста
-    const preview = task.results[0].content.substring(0, 50) + '...';
-
-    const messageText = `🆔 *Задача:* \`${task.id}\`\n` +
-                        `📅 *Старт:* ${dateStr}\n` +
-                        `🔁 *Тип:* ${task.frequency}\n` +
-                        `🌐 *Площадки:* ${platforms}\n` +
-                        `📝 *Текст:* _${preview}_`;
-
-    const keyboard = Markup.inlineKeyboard([
-      [
-        Markup.button.callback('🛑 Остановить/Удалить', `delete_task_${task.id}`),
-        // Можно добавить кнопку "Изменить время", если захочешь позже
-      ]
-    ]);
-
-    await ctx.reply(messageText, { parse_mode: 'Markdown', ...keyboard });
-  }
-});
 
 postModule.action(/^delete_task_(.+)$/, async (ctx) => {
   const taskId = ctx.match[1];
