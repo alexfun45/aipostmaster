@@ -1,3 +1,4 @@
+import { constants } from 'fs';
 import {Context} from 'telegraf'
 
 export const AvailableSocialPlatform = {
@@ -30,8 +31,22 @@ export const BotState = {
   AWAITING_CHANNEL_ID: 'AWAITING_CHANNEL_ID',
   AWAITING_POST_TEXT: 'AWAITING_POST_TEXT',
   AWAITING_POST_IMAGE: 'AWAITING_POST_IMAGE',
+  AWAITING_POST_DATETIME: 'AWAITING_POST_DATETIME',
+  AWAITING_INTERVAL_VALUE: 'AWAITING_INTERVAL_VALUE',
   AWAITING_SCHEDULE: 'AWAITING_SCHEDULE' 
 } as const
+
+export type BotState = typeof BotState[keyof typeof BotState];
+
+export const PostFrequency = {
+  ONCE:'ONCE',
+  INTERVAL: 'INTERVAL', // Через промежуток
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY'
+} as const
+
+export type PostFrequency = typeof PostFrequency[keyof typeof PostFrequency];
 
 export interface PostDraft {
   rawText?: string;
@@ -39,7 +54,8 @@ export interface PostDraft {
   imageUrl?: string;
   autoGenerateImage?: boolean;
   platform: SocialPlatform;
-  scheduleType?: 'NOW' | 'ONCE' | 'REPEAT';
+  frequency?: PostFrequency;
+  intervalValue?: number; // В минутах или часах
   publishTime?: string;
 }
 
