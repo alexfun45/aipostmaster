@@ -145,4 +145,4 @@ setupModule.action('cancel_setup', async (ctx: botContext) => {
   ctx.session.state = BotState.IDLE;
 })
 
-export {setupModule}
+export default setupModule

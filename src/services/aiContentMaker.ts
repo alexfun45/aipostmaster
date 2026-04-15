@@ -1,7 +1,8 @@
 import 'dotenv/config'
 import { ChatOpenAI } from "@langchain/openai"
 import { PromptTemplate } from '@langchain/core/prompts'
-import {AvailableSocialPlatform, SocialPlatform} from '../types/types.ts'
+import {AvailableSocialPlatform} from '../types/types.ts'
+import type {SocialPlatform} from '../types/types.ts'
 import type {SocialPlatformType} from '../types/types.ts'
 
 
@@ -25,24 +26,34 @@ export class AIContentService {
     }); 
   }
 
-  async adaptContent(originalText: string, platform: SocialPlatform): Promise<string> {
+  async adaptContent(originalText: string, platformType: AvailableSocialPlatform): Promise<string> {
 
-    const prompts: SocialPlatformType = {
-      [AvailableSocialPlatform.TELEGRAM]: "Сделай пост структурированным, используй эмодзи и Markdown.",
-      [AvailableSocialPlatform.VK]: "Напиши пост в дружелюбном стиле, добавь призыв к обсуждению.",
-      [AvailableSocialPlatform.INSTAGRAM]: "Сделай текст коротким, ярким, добавь 5-10 релевантных хештегов."
+    const instructions = {
+      [AvailableSocialPlatform.TELEGRAM]: "Сделай пост структурированным, используй эмодзи и Markdown. Сохраняй абзацы.",
+      [AvailableSocialPlatform.VK]: "Напиши пост в дружелюбном стиле, добавь призыв к обсуждению в комментариях.",
+      [AvailableSocialPlatform.INSTAGRAM]: "Сделай текст коротким, ярким, добавь 5-10 релевантных хештегов в конце."
     };
 
     const template = PromptTemplate.fromTemplate(
-      `Адаптируй этот текст для платформы: {platform}. Инструкция: {instruction}. context: {context}`
+      `Ты — эксперт по SMM. Твоя задача адаптировать текст под конкретную соцсеть.
+      Платформа: {platform}
+      Инструкция: {instruction}
+      
+      Оригинальный текст:
+      {context}
+      
+      Выдай только готовый текст поста без лишних пояснений.`
     );
 
-   const result = await template.invoke({
-      platform: platform,
-      instruction: prompts[platform],
+    const chain = template.pipe(this.model);
+
+    const result: any = await chain.invoke({
+      platform: platformType,
+      instruction: instructions[platformType],
       context: originalText
-   });
-    
-   return result.toString();
-  }
+    });
+    return result.content;
+    }
 }
+
+export default AIContentService

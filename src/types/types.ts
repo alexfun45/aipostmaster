@@ -10,7 +10,7 @@ export const AvailableSocialPlatform = {
 
 export type SocialPlatform = 'TELEGRAM' | 'VK' | 'INSTAGRAM';
 
-//export type SocialPlatformType = typeof AvailableSocialPlatform[keyof typeof AvailableSocialPlatform];
+export type AvailableSocialPlatform = typeof AvailableSocialPlatform[keyof typeof AvailableSocialPlatform];
 
 export interface SocialPlatformType{
   [AvailableSocialPlatform: string]: string
@@ -54,9 +54,10 @@ export interface PostDraft {
   imageUrl?: string;
   autoGenerateImage?: boolean;
   platform: SocialPlatform;
+  selectedPlatforms: [];
   frequency?: PostFrequency;
   intervalValue?: number; // В минутах или часах
-  publishTime?: string;
+  scheduledAt?: string;
 }
 
 type typeBotState = typeof BotState[keyof typeof BotState];
