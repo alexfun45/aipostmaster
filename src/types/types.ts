@@ -34,18 +34,28 @@ export const BotState = {
 } as const
 
 export interface PostDraft {
+  rawText?: string;
   text?: string;
   imageUrl?: string;
   autoGenerateImage?: boolean;
-  platform: 'TG' | 'VK' | 'INST';
+  platform: SocialPlatform;
   scheduleType?: 'NOW' | 'ONCE' | 'REPEAT';
   publishTime?: string;
 }
 
 type typeBotState = typeof BotState[keyof typeof BotState];
 
+export interface UserPlatform {
+  type: 'TELEGRAM' | 'VK' | 'TWITTER';
+  internalId: string;    // ID в самой соцсети (например, -100...)
+  title: string;         // Название (например, "Мой лайфстайл блог")
+  accessToken?: string;  // Токен (нужен для VK/Twitter, для TG не нужен)
+  isActive: boolean;
+}
+
 export interface botContext extends Context {
   session: {
+    platforms: UserPlatform[],
     state: typeBotState;
     draft?: PostDraft;
   }
