@@ -9,7 +9,7 @@ import type {SocialPlatformType} from '../types/types.ts'
 export class AIContentService {
   private model: any;
 
-  constructor(apiKey: string) {
+  constructor() {
     
     this.model = new ChatOpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,

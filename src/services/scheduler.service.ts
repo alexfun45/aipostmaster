@@ -22,7 +22,6 @@ export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
 
         let isChanged = false;
         const now = Date.now();
-
         for (const task of sessionData.activeTasks) {
           if (task.status === 'PENDING' && now >= task.scheduledAt) {
             console.log(`[Scheduler] Выполняю задачу: ${task.id}`);
@@ -42,17 +41,40 @@ export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
     } catch (error) {
       console.error('[Scheduler Error]:', error);
     }
-  }, 60000); 
+  }, 30000);
+  //}, 60000); 
 }
 
 async function executeTask(bot: any, task: any, session: any) {
-  for (const res of task.results) {
+  const { imageSource, imageFileId, imageUrl, results } = task;
+  console.log(`[Scheduler] === СРАБОТАЛ ПЛАНИРОВЩИК ===`);
+  console.log(`[Scheduler] Задача ID: ${task.id}`);
+  console.log(`[Scheduler] Данные медиа: FileID="${task.imageFileId}", Source="${task.imageSource}"`);for (const res of results) {
     try {
       if (res.type === 'TELEGRAM') {
-        await bot.telegram.sendMessage(res.platformId, res.content, { parse_mode: 'Markdown' });
+        if (imageFileId) {
+          console.log(`[Scheduler] Шлю ФОТО (file_id) в ${res.platformId}`);
+          await bot.telegram.sendPhoto(res.platformId, imageFileId, { 
+            caption: res.content.substring(0, 1024),
+            parse_mode: 'Markdown' 
+          });
+        } 
+        // Если вдруг остался только URL (например, из другого сервиса)
+        else if (imageUrl) {
+          await bot.telegram.sendPhoto(res.platformId, imageUrl, { 
+            caption: res.content.substring(0, 1024),
+            parse_mode: 'Markdown' 
+          });
+        } 
+        // Если вообще ничего нет
+        else {
+          console.log(`[Scheduler] Шлю ТОЛЬКО ТЕКСТ в ${res.platformId}`);
+          await bot.telegram.sendMessage(res.platformId, res.content, { 
+            parse_mode: 'Markdown' 
+          });
+        }
       }
-      // Здесь добавишь логику для VK и других платформ
-      console.log(`✅ Пост отправлен на ${res.type} (${res.title})`);
+      console.log(`✅ Отправлено в ${res.type}`);
     } catch (e) {
       console.error(`❌ Ошибка отправки на ${res.platformId}:`, e);
     }
@@ -62,11 +84,17 @@ async function executeTask(bot: any, task: any, session: any) {
 function updateTaskAfterExecution(task: any) {
     if (task.frequency === 'ONCE') {
         task.status = 'COMPLETED';
-    } else {
+    } else if(task.frequency === 'INTERVAL'){
+      const interval = task.intervalMs || (60 * 60000); // По умолчанию час, если забыли
+      task.scheduledAt = Date.now() + interval;
+      task.status = 'PENDING'; // Оставляем активной
+      console.log(`[Scheduler] Задача ${task.id} перенесена на ${new Date(task.scheduledAt).toISOString()}`);
+    }
+    else {
         // Логика переноса времени: +1 день, +1 неделя и т.д.
         const dayMs = 24 * 60 * 60 * 1000;
         if (task.frequency === 'DAILY') task.scheduledAt += dayMs;
         if (task.frequency === 'WEEKLY') task.scheduledAt += dayMs * 7;
-        // и так далее...
+       
     }
 }

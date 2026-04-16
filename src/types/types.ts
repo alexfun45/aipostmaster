@@ -33,7 +33,9 @@ export const BotState = {
   AWAITING_POST_IMAGE: 'AWAITING_POST_IMAGE',
   AWAITING_POST_DATETIME: 'AWAITING_POST_DATETIME',
   AWAITING_INTERVAL_VALUE: 'AWAITING_INTERVAL_VALUE',
-  AWAITING_SCHEDULE: 'AWAITING_SCHEDULE' 
+  AWAITING_SCHEDULE: 'AWAITING_SCHEDULE',
+  AWAITING_POST_IMAGE_UPLOAD: 'AWAITING_POST_IMAGE_UPLOAD',
+  AWAITING_POST_IMAGE_PROMPT: 'AWAITING_POST_IMAGE_PROMPT'
 } as const
 
 export type BotState = typeof BotState[keyof typeof BotState];
@@ -51,9 +53,12 @@ export type PostFrequency = typeof PostFrequency[keyof typeof PostFrequency];
 export interface PostDraft {
   rawText?: string;
   text?: string;
-  imageUrl?: string;
   autoGenerateImage?: boolean;
   platform: SocialPlatform;
+  imageSource?: 'UPLOAD' | 'AI' | 'NONE'; // Откуда картинка
+  imageFileId?: string; // Если загрузил пользователь
+  imageUrl?: string;    // Если сгенерировал ИИ
+  imagePrompt?: string; // Промпт для генерации
   selectedPlatforms: [];
   frequency?: PostFrequency;
   intervalValue?: number; // В минутах или часах
@@ -84,5 +89,9 @@ export interface botSession {
     platform: string;
     text?: string;
     targetId?: string;
+    imageSource?: 'UPLOAD' | 'AI' | 'NONE'; // Откуда картинка
+    imageFileId?: string; // Если загрузил пользователь
+    imageUrl?: string;    // Если сгенерировал ИИ
+    imagePrompt?: string; // Промпт для генерации
   };
 }

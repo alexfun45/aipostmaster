@@ -21,6 +21,8 @@ const getMainMenu = () => {
 
 //const connectedClient = await initRedis(); 
 const connectedClient = createClient();
+connectedClient.on('error', err => console.log('Redis Client Error', err));
+connectedClient.on('connect', () => console.log('Redis Connected!'));
 //await connectedClient.connect();
 const store = Redis({
     client: connectedClient,
@@ -43,6 +45,17 @@ bot.use(session({
   }) 
 }));
 
+bot.use(async (ctx, next) => {
+  console.log(`Получено сообщение: ${ctx.message?.text || ctx.callbackQuery?.data}`);
+  console.log(`Текущий стейт: ${ctx.session?.state}`);
+  return next();
+});
+
+bot.start(async (ctx) => {
+  ctx.session.state = BotState.IDLE;
+  await ctx.reply("Добро пожаловать в ИИ-бот автопостинга", getMainMenu());
+})
+
 startScheduler(bot, connectedClient as any);
 
 // подключение модуля настройки соцсетей
@@ -50,15 +63,7 @@ bot.use(setupModule)
 bot.use(postModule)
 
 
-bot.start((ctx) => ctx.reply("Добро пожаловать в ИИ-бот автопостинга", getMainMenu()));
 
-/*
-bot.hears('📝 Создать пост', async (ctx: botContext) => {
-  ctx.session.state = BotState.AWAITING_POST_TEXT;
-  ctx.session.draft = { platform: 'TELEGRAM' };
-  await ctx.reply('Введите текст поста (или отправьте идею, а я её адаптирую):');
-});
-*/
 
 bot.launch();
 

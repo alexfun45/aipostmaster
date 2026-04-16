@@ -3,10 +3,12 @@ import type { botContext } from '../types/types.ts'
 import {BotState} from '../types/types.ts'
 import telegraf from 'telegraf';
 import AIContentService from '../services/aiContentMaker.ts'
+import { ImageAiService } from '../services/imageAi.service.ts';
 
 const postModule = new Composer<botContext>();
 const { Telegraf, Markup, session } = telegraf;
 const aiService = new AIContentService();
+const imageAi = new ImageAiService();
 
 postModule.hears('📝 Создать пост', async (ctx) => {
   ctx.session.state = BotState.AWAITING_POST_TEXT;
@@ -21,6 +23,38 @@ async function startEditPost(ctx: botContext){
   
   await ctx.reply('Пришлите текст поста или просто идею, а я помогу её оформить. ✨');
 }
+
+const getImageSourceMenu = () => {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('🖼 Загрузить свою', 'img_source_UPLOAD')],
+    [Markup.button.callback('🤖 Сгенерировать ИИ', 'img_source_AI')],
+    [Markup.button.callback('🚫 Без картинки', 'img_source_NONE')]
+  ]);
+};
+
+// 1. ВАРИАНТ: БЕЗ КАРТИНКИ
+postModule.action('img_source_NONE', async (ctx) => {
+  ctx.session.draft.imageSource = 'NONE';
+  await ctx.answerCbQuery();
+  // Переходим сразу к площадкам
+  await ctx.editMessageText('Хорошо, пост будет без картинки.\nТеперь выберите площадки:', getPostPlatformKeyboard(ctx.session.platforms, []));
+});
+
+// 2. ВАРИАНТ: ЗАГРУЗИТЬ СВОЮ
+postModule.action('img_source_UPLOAD', async (ctx) => {
+  ctx.session.draft.imageSource = 'UPLOAD';
+  ctx.session.state = BotState.AWAITING_POST_IMAGE_UPLOAD; // Новый стейт
+  await ctx.answerCbQuery();
+  await ctx.editMessageText('📤 Пожалуйста, отправьте изображение в чат (как фото, не как файл).');
+});
+
+// 3. ВАРИАНТ: СГЕНЕРИРОВАТЬ ИИ
+postModule.action('img_source_AI', async (ctx) => {
+  ctx.session.draft.imageSource = 'AI';
+  ctx.session.state = BotState.AWAITING_POST_IMAGE_PROMPT; // Новый стейт
+  await ctx.answerCbQuery();
+  await ctx.editMessageText('🤖 Опишите идею для генерации изображения (на русском или английском):');
+});
 
 postModule.hears('📊 Активные рассылки', async (ctx) => {
   const tasks = ctx.session.activeTasks || [];
@@ -79,6 +113,21 @@ postModule.action(/^freq_(.+)$/, async (ctx) => {
       Markup.inlineKeyboard([[Markup.button.callback('🤖 Генерировать', 'process_ai_start')]]));
   }
 
+  if(freq === 'INTERVAL'){
+    ctx.session.state = BotState.AWAITING_INTERVAL_VALUE;
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('1 час', 'set_int_60'), Markup.button.callback('3 часа', 'set_int_180')],
+      [Markup.button.callback('6 часов', 'set_int_360'), Markup.button.callback('12 часов', 'set_int_720')],
+      [Markup.button.callback('⬅️ Назад', 'process_post_datetime')]
+    ]);
+  
+    await ctx.editMessageText(
+      '⏳ *Установка интервала*\n\nВыберите готовый вариант или **напишите числом в чат**, через сколько минут повторно отправлять пост:',
+      { parse_mode: 'Markdown', ...keyboard }
+    );
+    return await ctx.answerCbQuery();
+  }
+
   ctx.session.state = BotState.AWAITING_POST_DATETIME;
   await ctx.reply(
     '📅 Укажите дату и время первого запуска в формате:\n' +
@@ -86,6 +135,12 @@ postModule.action(/^freq_(.+)$/, async (ctx) => {
     'Я проверю, чтобы время не было в прошлом.',
     { parse_mode: 'Markdown' }
   );
+});
+
+postModule.action(/^set_int_(\d+)$/, async (ctx) => {
+  const minutes = parseInt(ctx.match[1]);
+  await setInternalTask(ctx, minutes);
+  await ctx.answerCbQuery();
 });
 
 async function handle_post_period(ctx: botContext){
@@ -140,17 +195,15 @@ async function handle_post_text(ctx: botContext){
     );
   }
 
-  // 4. ПЕРВЫЙ ВЫЗОВ функции генерации клавиатуры
-  // По умолчанию передаем пустой массив выбранных ID [], так как пользователь еще ничего не выбрал
-  const keyboard = getPostPlatformKeyboard(userPlatforms, []);
-
-  await ctx.reply(
+  await ctx.reply('📝 Текст принят!\nТеперь давайте добавим изображение:', getImageSourceMenu());
+  //const keyboard = getPostPlatformKeyboard(userPlatforms, []);
+  /*await ctx.reply(
     '📝 *Текст принят!*\n\nТеперь выберите площадки, на которых нужно опубликовать этот пост:',
     { 
       parse_mode: 'Markdown',
       ...keyboard 
     }
-  );
+  );*/
 }
 
 postModule.action('process_ai_start', async (ctx) => {
@@ -215,7 +268,17 @@ postModule.action('cancel_post', async (ctx) => {
 })
 
 postModule.action('post_confirm', async (ctx) => {
-  const { results, scheduledAt, frequency } = ctx.session.draft;
+  const { 
+    results, 
+    scheduledAt, 
+    frequency, 
+    intervalMs, 
+    imageFileId, 
+    imageSource,
+    text
+  } = ctx.session.draft;
+
+  console.log(`[Confirm] Сохраняю задачу. FileID в черновике: ${imageFileId}`);
 
   if (!results || results.length === 0) {
     return ctx.answerCbQuery('⚠️ Ошибка: данные поста утеряны.');
@@ -227,6 +290,9 @@ postModule.action('post_confirm', async (ctx) => {
     userId: ctx.from!.id,
     results, // Массив адаптированных текстов
     frequency,
+    intervalMs: intervalMs || 0,
+    imageFileId: imageFileId || null, 
+    imageSource: imageSource || 'NONE',
     scheduledAt: scheduledAt ? new Date(scheduledAt).getTime() : Date.now(),
     status: 'PENDING',
     createdAt: Date.now()
@@ -262,7 +328,7 @@ postModule.action(/^toggle_post_plt_(.+)$/, async (ctx) => {
   if (!ctx.session.draft.selectedPlatforms) {
     ctx.session.draft.selectedPlatforms = [];
   }
-
+  
   const selectedPlatforms = ctx.session.draft.selectedPlatforms;
   const index = selectedPlatforms.indexOf(platformId);
 
@@ -315,10 +381,80 @@ const getPostPlatformKeyboard = (allPlatforms: any[], selectedIds: string[] = []
   return Markup.inlineKeyboard(buttons);
 };
 
+async function handle_interval_execution(ctx){
+  const minutes = parseInt(ctx.message.text);
+
+  if (isNaN(minutes) || minutes <= 0) {
+    return ctx.reply('⚠️ Пожалуйста, введите положительное число минут (например, 120).');
+  }
+
+  await setInternalTask(ctx, minutes);
+}
+
+async function setInternalTask(ctx: any, minutes: number){
+  // Устанавливаем время первого запуска — прямо сейчас + интервал
+  const scheduledAt = Date.now() + minutes * 60000;
+  
+  ctx.session.draft.scheduledAt = scheduledAt;
+  ctx.session.draft.intervalMs = minutes * 60000; // Сохраняем интервал для повторов
+  ctx.session.draft.frequency = 'INTERVAL';
+  //ctx.session.state = BotState.IDLE;
+
+  await ctx.reply(
+    `✅ Интервал установлен: повтор каждые ${minutes} мин.\n` +
+    `Первый запуск: ${new Date(scheduledAt).toLocaleString('ru-RU')}`,
+    Markup.inlineKeyboard([[Markup.button.callback('🚀 Перейти к генерации ИИ', 'process_ai_start')]])
+  );
+}
+
 postModule.action('process_post_datetime', (ctx)=>{
+  console.log('Пеерд датой', ctx.session.draft);
+  console.log(`[Check] Переход к дате. FileID в сессии: ${ctx.session.draft?.imageFileId}`);
   ctx.session.state = BotState.AWAITING_POST_DATETIME;
   ctx.reply('Теперь выберите с какой периодичностью отправлять пост в выбранные соцсети:', getFrequencyMenu());
 });
+
+async function handle_generate_image(ctx){
+  const prompt = ctx.message.text;
+  ctx.session.draft.imagePrompt = prompt;
+
+  const statusMessage = await ctx.reply('🤖 Магия ИИ началась... Генерирую изображение по вашему описанию. Это может занять до 20 секунд.');
+
+  try {
+    const imageData = await imageAi.generateImage(prompt);
+    let sentMessage;
+
+    if (typeof imageData === 'string') {
+      // Это URL из заглушки
+      sentMessage = await ctx.replyWithPhoto({ url: imageData }, {
+        caption: `✅ Тестовое изображение сгенерировано (Бесплатно)!`,
+      });
+    } else {
+      // Это Buffer из реального ИИ
+      sentMessage = await ctx.replyWithPhoto({ source: imageData }, {
+        caption: `✅ Изображение сгенерировано по запросу: _${prompt}_`,
+        parse_mode: 'Markdown',
+      });
+    }
+
+    // Сохраняем file_id самого большого фото из отправленного сообщения
+    const photo = sentMessage.photo[sentMessage.photo.length - 1];
+
+    ctx.session.draft.imageFileId = photo.file_id;
+    ctx.session.draft.imageSource = 'UPLOAD'; // Трактуем как загруженное (через file_id)
+    //ctx.session.draft.imageUrl = undefined;
+
+    //await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+    ctx.session.state = BotState.IDLE;
+    await ctx.reply('Теперь выберите площадки:', getPostPlatformKeyboard(ctx.session.platforms, []));
+  } catch (error) {
+    await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+    console.error('--- ПОДРОБНАЯ ОШИБКА ГЕНЕРАЦИИ ---');
+    console.error(error); 
+    if (error.response) console.error('Ответ от Telegram:', error.response.description);
+      await ctx.reply('❌ Ошибка генерации ИИ. Попробуйте загрузить свою картинку или выберите "Без картинки".', getImageSourceMenu());
+  }
+}
 
 // обработка сообщений пользователя
 postModule.on('message', async (ctx, next) => {
@@ -329,13 +465,38 @@ postModule.on('message', async (ctx, next) => {
     //ctx.session.state = BotState.AWAITING_POST_DATETIME;
   }
 
+  if(ctx.session.state === BotState.AWAITING_INTERVAL_VALUE && 'text' in ctx.message) {
+    await handle_interval_execution(ctx);
+  }
+
   if (ctx.session.state === BotState.AWAITING_POST_DATETIME && 'text' in ctx.message){
-    handle_post_period(ctx);
+    await handle_post_period(ctx);
+  }
+
+  if(ctx.session.state === BotState.AWAITING_POST_IMAGE_PROMPT && 'text' in ctx.message){
+    await handle_generate_image(ctx);
   }
 
 });
 
+postModule.on('photo', async (ctx, next) => {
+  if (ctx.session.state !== BotState.AWAITING_POST_IMAGE_UPLOAD || !ctx.message.photo) {
+    return next();
+  }
 
+  // Телеграм присылает массив разных размеров, берем самый большой (последний)
+  const photo = ctx.message.photo[ctx.message.photo.length - 1];
+  // Сохраняем file_id. Это супер-эффективно на 4 ГБ ОЗУ, так как мы не качаем файл
+  ctx.session.draft.imageFileId = photo.file_id;
+  ctx.session.state = BotState.IDLE;
+  await ctx.reply('✅ Изображение загружено!');
+  
+  // Показываем превью и переходим к площадкам
+  await ctx.replyWithPhoto(photo.file_id, {
+    caption: 'Ваш пост будет выглядеть так.\nТеперь выберите площадки:',
+    ...getPostPlatformKeyboard(ctx.session.platforms, [])
+  });
+});
 
 postModule.action(/^delete_task_(.+)$/, async (ctx) => {
   const taskId = ctx.match[1];
