@@ -49,7 +49,7 @@ export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
 }
 
 async function executeTask(bot: any, task: any) {
-  const { imageSource, imageFileId, imageUrl, results, isDynamic } = task;
+  const { imageSource, imageFileId, imageUrl, results, isDynamic, rawText } = task;
   console.log(`[Scheduler] === СРАБОТАЛ ПЛАНИРОВЩИК ===`);
   console.log(`[Scheduler] Задача ID: ${task.id}`);
   console.log(`[Scheduler] Данные медиа: FileID="${task.imageFileId}", Source="${task.imageSource}"`);
@@ -57,10 +57,12 @@ async function executeTask(bot: any, task: any) {
     try {
       if (res.type === 'TELEGRAM') {
         let content = res.content;
+        console.log('получил задачу', task);
+        console.log('res', res);
         if(isDynamic){
           try {
             // Вызываем ИИ заново, используя исходный текст задачи
-            content = await aiService.adaptContent(task.rawText, res.type);
+            content = await aiService.adaptContent(rawText, res.type);
           } catch (e) {
             console.error('Ошибка динамической генерации, использую старый текст');
           }

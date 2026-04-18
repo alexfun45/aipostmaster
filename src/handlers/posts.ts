@@ -216,6 +216,7 @@ async function handle_post_text(ctx: botContext){
 
 postModule.action(/^mode_(.+)$/, async (ctx) => {
   const mode = ctx.match[1];
+  console.log('mode', mode);
   ctx.session.draft.isDynamic = (mode === 'DYNAMIC');
   await ctx.answerCbQuery();
 
@@ -295,7 +296,7 @@ postModule.action('post_confirm', async (ctx) => {
     intervalMs, 
     imageFileId, 
     imageSource,
-    text
+    rawText
   } = ctx.session.draft;
 
   console.log(`[Confirm] Сохраняю задачу. FileID в черновике: ${imageFileId}`);
@@ -310,6 +311,7 @@ postModule.action('post_confirm', async (ctx) => {
     userId: ctx.from!.id,
     results, // Массив адаптированных текстов
     frequency,
+    rawText,
     intervalMs: intervalMs || 0,
     isDynamic: ctx.session.draft.isDynamic || false,
     imageFileId: imageFileId || null, 
