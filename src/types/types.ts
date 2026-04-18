@@ -53,6 +53,7 @@ export type PostFrequency = typeof PostFrequency[keyof typeof PostFrequency];
 export interface PostDraft {
   rawText?: string;
   text?: string;
+  isDynamic: boolean;
   autoGenerateImage?: boolean;
   platform: SocialPlatform;
   imageSource?: 'UPLOAD' | 'AI' | 'NONE'; // Откуда картинка

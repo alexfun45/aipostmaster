@@ -1,6 +1,9 @@
 import { Telegraf } from 'telegraf';
 import Redis from 'redis';
 import type { botContext } from '../types/types.ts';
+import AIContentService from '../services/aiContentMaker.ts'
+
+const aiService = new AIContentService();
 
 export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
   setInterval(async () => {
@@ -45,31 +48,42 @@ export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
   //}, 60000); 
 }
 
-async function executeTask(bot: any, task: any, session: any) {
-  const { imageSource, imageFileId, imageUrl, results } = task;
+async function executeTask(bot: any, task: any) {
+  const { imageSource, imageFileId, imageUrl, results, isDynamic } = task;
   console.log(`[Scheduler] === СРАБОТАЛ ПЛАНИРОВЩИК ===`);
   console.log(`[Scheduler] Задача ID: ${task.id}`);
-  console.log(`[Scheduler] Данные медиа: FileID="${task.imageFileId}", Source="${task.imageSource}"`);for (const res of results) {
+  console.log(`[Scheduler] Данные медиа: FileID="${task.imageFileId}", Source="${task.imageSource}"`);
+  for (const res of results) {
     try {
       if (res.type === 'TELEGRAM') {
+        let content = res.content;
+        if(isDynamic){
+          try {
+            // Вызываем ИИ заново, используя исходный текст задачи
+            content = await aiService.adaptContent(task.rawText, res.type);
+          } catch (e) {
+            console.error('Ошибка динамической генерации, использую старый текст');
+          }
+        }
+        const finalCaption = content.substring(0, 1021) + "...";
         if (imageFileId) {
           console.log(`[Scheduler] Шлю ФОТО (file_id) в ${res.platformId}`);
           await bot.telegram.sendPhoto(res.platformId, imageFileId, { 
-            caption: res.content.substring(0, 1024),
+            caption: finalCaption,
             parse_mode: 'Markdown' 
           });
         } 
         // Если вдруг остался только URL (например, из другого сервиса)
         else if (imageUrl) {
           await bot.telegram.sendPhoto(res.platformId, imageUrl, { 
-            caption: res.content.substring(0, 1024),
+            caption: finalCaption,
             parse_mode: 'Markdown' 
           });
         } 
         // Если вообще ничего нет
         else {
           console.log(`[Scheduler] Шлю ТОЛЬКО ТЕКСТ в ${res.platformId}`);
-          await bot.telegram.sendMessage(res.platformId, res.content, { 
+          await bot.telegram.sendMessage(res.platformId, finalCaption, { 
             parse_mode: 'Markdown' 
           });
         }

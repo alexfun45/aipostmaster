@@ -179,6 +179,13 @@ async function handle_post_period(ctx: botContext){
   );
 }
 
+const getContentModeMenu = () => {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('📜 Один текст (статичный)', 'mode_STATIC')],
+    [Markup.button.callback('🔄 Всегда новый (динамичный)', 'mode_DYNAMIC')]
+  ]);
+};
+
 async function handle_post_text(ctx: botContext){
   if(!ctx.message?.text) return ;
   ctx.session.draft.rawText = ctx.message.text;
@@ -195,7 +202,8 @@ async function handle_post_text(ctx: botContext){
     );
   }
 
-  await ctx.reply('📝 Текст принят!\nТеперь давайте добавим изображение:', getImageSourceMenu());
+  //await ctx.reply('📝 Текст принят!\nТеперь давайте добавим изображение:', getImageSourceMenu());
+  await ctx.reply('📝 Текст принят!\nТеперь выберите режим контента:', getContentModeMenu());
   //const keyboard = getPostPlatformKeyboard(userPlatforms, []);
   /*await ctx.reply(
     '📝 *Текст принят!*\n\nТеперь выберите площадки, на которых нужно опубликовать этот пост:',
@@ -205,6 +213,18 @@ async function handle_post_text(ctx: botContext){
     }
   );*/
 }
+
+postModule.action(/^mode_(.+)$/, async (ctx) => {
+  const mode = ctx.match[1];
+  ctx.session.draft.isDynamic = (mode === 'DYNAMIC');
+  await ctx.answerCbQuery();
+
+  // Теперь переходим к генерации первого варианта (превью)
+  await ctx.reply('Теперь давайте добавим изображение:', 
+  getImageSourceMenu());
+});
+
+
 
 postModule.action('process_ai_start', async (ctx) => {
   const { rawText, selectedPlatforms } = ctx.session.draft;
@@ -291,6 +311,7 @@ postModule.action('post_confirm', async (ctx) => {
     results, // Массив адаптированных текстов
     frequency,
     intervalMs: intervalMs || 0,
+    isDynamic: ctx.session.draft.isDynamic || false,
     imageFileId: imageFileId || null, 
     imageSource: imageSource || 'NONE',
     scheduledAt: scheduledAt ? new Date(scheduledAt).getTime() : Date.now(),
@@ -405,6 +426,7 @@ async function setInternalTask(ctx: any, minutes: number){
     `Первый запуск: ${new Date(scheduledAt).toLocaleString('ru-RU')}`,
     Markup.inlineKeyboard([[Markup.button.callback('🚀 Перейти к генерации ИИ', 'process_ai_start')]])
   );
+  
 }
 
 postModule.action('process_post_datetime', (ctx)=>{
