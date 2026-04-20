@@ -61,10 +61,6 @@ startScheduler(bot, connectedClient as any);
 // подключение модуля настройки соцсетей
 bot.use(setupModule)
 bot.use(postModule)
-
-
-
-
 bot.launch();
 
 

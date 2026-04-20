@@ -50,6 +50,11 @@ export const PostFrequency = {
 
 export type PostFrequency = typeof PostFrequency[keyof typeof PostFrequency];
 
+export interface MassDraftItem {
+  text: string;
+  imageFileId?: string;
+}
+
 export interface PostDraft {
   rawText?: string;
   text?: string;
@@ -60,10 +65,12 @@ export interface PostDraft {
   imageFileId?: string; // Если загрузил пользователь
   imageUrl?: string;    // Если сгенерировал ИИ
   imagePrompt?: string; // Промпт для генерации
-  selectedPlatforms: [];
+  selectedPlatforms: string[];
   frequency?: PostFrequency;
   intervalValue?: number; // В минутах или часах
   scheduledAt?: string;
+  massItems?: MassDraftItem[]; 
+  isMassMode?: boolean;
 }
 
 type typeBotState = typeof BotState[keyof typeof BotState];
