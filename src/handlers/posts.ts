@@ -5,7 +5,7 @@ import telegraf from 'telegraf';
 import AIContentService from '../services/aiContentMaker.ts'
 
 import {PostKeyboards} from '../keyboards/post.kb.ts'
-import {startEditPost, handle_post_period, handle_post_text, handle_interval_execution, setInternalTask, handle_generate_image} from '../logic/post.logic.ts'
+import {startEditPost, handle_post_period, handle_post_text, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
 
 const postModule = new Composer<botContext>();
 const { Telegraf, Markup, session } = telegraf;
@@ -19,9 +19,21 @@ postModule.hears('📝 Создать пост', async (ctx) => {
   await ctx.reply('Пришлите текст поста или просто идею, а я помогу её оформить. ✨');
 });
 
+postModule.hears('📦 Массовое создание', async (ctx) => {
+  ctx.session.draft = { isMassMode: true, massItems: [], selectedPlatforms: [] };
+  ctx.session.state = BotState.AWAITING_POST_TEXT;
+  await ctx.reply('🚀 Режим массовой загрузки. Пришлите текст для ПЕРВОГО поста:');
+});
+
 // 1. ВАРИАНТ: БЕЗ КАРТИНКИ
 postModule.action('img_source_NONE', async (ctx) => {
   ctx.session.draft.imageSource = 'NONE';
+  if(ctx.session.draft.isMassMode){
+    return await ctx.reply(`Пост без картинки`, Markup.inlineKeyboard([
+      [Markup.button.callback('➕ Добавить еще пост', 'mass_add_next')],
+      [Markup.button.callback('⚙️ Перейти к настройке всей пачки', 'process_mass_setup')]
+    ]));
+  }
   await ctx.answerCbQuery();
   // Переходим сразу к площадкам
   await ctx.editMessageText('Хорошо, пост будет без картинки.\nТеперь выберите площадки:', PostKeyboards.platforms(ctx.session.platforms, []))
@@ -209,44 +221,47 @@ postModule.action('post_confirm', async (ctx) => {
   if (!results || results.length === 0) {
     return ctx.answerCbQuery('⚠️ Ошибка: данные поста утеряны.');
   }
+  if (ctx.session.draft.isMassMode) {
+    await scheduleMassQueue(ctx);
+  } else {
+    // Создаем объект задачи
+    const newTask = {
+      id: Date.now().toString(), // Уникальный ID задачи
+      userId: ctx.from!.id,
+      results, // Массив адаптированных текстов
+      frequency,
+      rawText,
+      intervalMs: intervalMs || 0,
+      isDynamic: ctx.session.draft.isDynamic || false,
+      imageFileId: imageFileId || null, 
+      imageSource: imageSource || 'NONE',
+      scheduledAt: scheduledAt ? new Date(scheduledAt).getTime() : Date.now(),
+      status: 'PENDING',
+      createdAt: Date.now()
+    };
 
-  // Создаем объект задачи
-  const newTask = {
-    id: Date.now().toString(), // Уникальный ID задачи
-    userId: ctx.from!.id,
-    results, // Массив адаптированных текстов
-    frequency,
-    rawText,
-    intervalMs: intervalMs || 0,
-    isDynamic: ctx.session.draft.isDynamic || false,
-    imageFileId: imageFileId || null, 
-    imageSource: imageSource || 'NONE',
-    scheduledAt: scheduledAt ? new Date(scheduledAt).getTime() : Date.now(),
-    status: 'PENDING',
-    createdAt: Date.now()
-  };
+    // Сохраняем в список активных задач пользователя
+    ctx.session.activeTasks ??= [];
+    ctx.session.activeTasks.push(newTask);
 
-  // Сохраняем в список активных задач пользователя
-  ctx.session.activeTasks ??= [];
-  ctx.session.activeTasks.push(newTask);
+    await ctx.answerCbQuery('✅ Задача запланирована!');
+    
+    const timeStr = scheduledAt 
+      ? new Date(scheduledAt).toLocaleString('ru-RU') 
+      : 'немедленно';
 
-  await ctx.answerCbQuery('✅ Задача запланирована!');
-  
-  const timeStr = scheduledAt 
-    ? new Date(scheduledAt).toLocaleString('ru-RU') 
-    : 'немедленно';
+    await ctx.editMessageText(
+      `🚀 *Пост успешно запланирован!*\n\n` +
+      `📅 Время старта: ${timeStr}\n` +
+      `🔁 Периодичность: ${frequency}\n\n` +
+      `Вы можете просмотреть свои активные рассылки в главном меню.`,
+      { parse_mode: 'Markdown' }
+    );
 
-  await ctx.editMessageText(
-    `🚀 *Пост успешно запланирован!*\n\n` +
-    `📅 Время старта: ${timeStr}\n` +
-    `🔁 Периодичность: ${frequency}\n\n` +
-    `Вы можете просмотреть свои активные рассылки в главном меню.`,
-    { parse_mode: 'Markdown' }
-  );
-
-  // Очищаем черновик для новых постов
-  ctx.session.draft = { selectedPlatforms: [] };
-  ctx.session.state = BotState.IDLE;
+    // Очищаем черновик для новых постов
+    ctx.session.draft = { selectedPlatforms: [] };
+    ctx.session.state = BotState.IDLE;
+    }
 });
 
 postModule.action(/^toggle_post_plt_(.+)$/, async (ctx) => {
@@ -320,24 +335,45 @@ postModule.on('message', async (ctx, next) => {
 });
 
 postModule.on('photo', async (ctx, next) => {
-  console.log('photo');
   if (ctx.session.state !== BotState.AWAITING_POST_IMAGE_UPLOAD || !ctx.message.photo) {
     return next();
   }
 
   // Телеграм присылает массив разных размеров, берем самый большой (последний)
   const photo = ctx.message.photo[ctx.message.photo.length - 1];
-  // Сохраняем file_id. Это супер-эффективно на 4 ГБ ОЗУ, так как мы не качаем файл
-  console.log('photo', photo);
-  ctx.session.draft.imageFileId = photo.file_id;
-  ctx.session.state = BotState.IDLE;
-  await ctx.reply('✅ Изображение загружено!');
+  
+  if (ctx.session.draft.isMassMode) {
+    ctx.session.draft.currentItem!.imageFileId = photo.file_id;
+    await pushCurrentItemToMass(ctx);
+
+    const count = ctx.session.draft.massItems.length;
+    await ctx.reply(`✅ Изображение загружено!`, Markup.inlineKeyboard([
+      [Markup.button.callback('➕ Добавить еще пост', 'mass_add_next')],
+      [Markup.button.callback('⚙️ Перейти к настройке всей пачки', 'process_mass_setup')]
+    ]));
+  } else {
+    ctx.session.draft.imageFileId = photo.file_id;
+    ctx.session.state = BotState.IDLE;
+  }
+  
   
   // Показываем превью и переходим к площадкам
   await ctx.replyWithPhoto(photo.file_id, {
     caption: 'Ваш пост будет выглядеть так.\nТеперь выберите площадки:',
     ...PostKeyboards.platforms(ctx.session.platforms, [])
   });
+});
+
+postModule.action('mass_add_next', async (ctx) => {
+  await ctx.answerCbQuery();
+  ctx.session.state = BotState.AWAITING_POST_TEXT;
+  await ctx.reply('Пришлите текст поста:');
+})
+
+postModule.action('process_mass_setup', async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.reply('Настроим расписание для всей очереди. Сначала выберите площадки:', 
+    PostKeyboards.platforms(ctx.session.platforms, []));
 });
 
 postModule.action(/^delete_task_(.+)$/, async (ctx) => {

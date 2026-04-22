@@ -71,6 +71,10 @@ export interface PostDraft {
   scheduledAt?: string;
   massItems?: MassDraftItem[]; 
   isMassMode?: boolean;
+  currentItem?: {
+    text: string;
+    imageFileId?: string;
+  };
 }
 
 type typeBotState = typeof BotState[keyof typeof BotState];

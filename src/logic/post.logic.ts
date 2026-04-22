@@ -52,9 +52,15 @@ export async function handle_post_period(ctx: botContext){
 
 // получение и сохранение текста поста
 export async function handle_post_text(ctx: botContext){
-  if(!ctx.message?.text) return ;
-  ctx.session.draft.rawText = ctx.message.text;
+  const text = ctx.message?.text;
+  if(!text) return ;
   
+  if (ctx.session.draft.isMassMode) {
+    ctx.session.draft.currentItem = { text };
+  } else {
+    ctx.session.draft.rawText = text;
+  }
+
   const userPlatforms = ctx.session.platforms || [];
   
   // Проверяем, есть ли вообще активные площадки
@@ -122,14 +128,23 @@ export async function handle_generate_image(ctx: botContext){
 
     // Сохраняем file_id самого большого фото из отправленного сообщения
     const photo = sentMessage.photo[sentMessage.photo.length - 1];
+    if (ctx.session.draft.isMassMode) {
+      ctx.session.draft.currentItem!.imageFileId = photo.file_id;
+      await pushCurrentItemToMass(ctx);
+      const count = ctx.session.draft.massItems.length;
+      await ctx.reply(`✅ Изображение загружено!`, Markup.inlineKeyboard([
+        [Markup.button.callback('➕ Добавить еще пост', 'mass_add_next')],
+        [Markup.button.callback('⚙️ Перейти к настройке всей пачки', 'process_mass_setup')]
+      ]));
+    } else {
+      ctx.session.draft.imageFileId = photo.file_id;
+      ctx.session.draft.imageSource = 'UPLOAD'; // Трактуем как загруженное (через file_id)
+      //ctx.session.draft.imageUrl = undefined;
 
-    ctx.session.draft.imageFileId = photo.file_id;
-    ctx.session.draft.imageSource = 'UPLOAD'; // Трактуем как загруженное (через file_id)
-    //ctx.session.draft.imageUrl = undefined;
-
-    //await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
-    ctx.session.state = BotState.IDLE;
-    await ctx.reply('Теперь выберите площадки:', PostKeyboards.platforms(ctx.session.platforms, []));
+      //await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+      ctx.session.state = BotState.IDLE;
+      await ctx.reply('Теперь выберите площадки:', PostKeyboards.platforms(ctx.session.platforms, []));
+    }
   } catch (error) {
     await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
     console.error('--- ПОДРОБНАЯ ОШИБКА ГЕНЕРАЦИИ ---');
@@ -138,4 +153,41 @@ export async function handle_generate_image(ctx: botContext){
       await ctx.reply('❌ Ошибка генерации ИИ. Попробуйте загрузить свою картинку или выберите "Без картинки".', PostKeyboards.imageSource())
       //getImageSourceMenu());
   }
+}
+
+// Сохраняем текущий черновик в массив "корзины"
+export async function pushCurrentItemToMass(ctx: any) {
+  const { currentItem, massItems = [] } = ctx.session.draft;
+  
+  if (currentItem) {
+    massItems.push({ ...currentItem });
+    ctx.session.draft.massItems = massItems;
+    ctx.session.draft.currentItem = undefined; // Очищаем для следующего
+  }
+}
+
+// Финальное создание задач из "корзины"
+export async function scheduleMassQueue(ctx: any) {
+  const { massItems, scheduledAt, intervalMs, selectedPlatforms } = ctx.session.draft;
+  const startTs = new Date(scheduledAt).getTime();
+
+  massItems.forEach((item: any, index: number) => {
+    const taskTs = startTs + (index * (intervalMs || 0));
+    
+    const newTask = {
+      id: `m_${Date.now()}_${index}`,
+      userId: ctx.from.id,
+      // Массовые посты пока шлем "как есть", адаптируя под площадки
+      results: selectedPlatforms.map((pId: string) => {
+        const plt = ctx.session.platforms.find((p: any) => p.internalId === pId);
+        return { platformId: pId, type: plt.type, content: item.text };
+      }),
+      imageFileId: item.imageFileId || null,
+      scheduledAt: taskTs,
+      status: 'PENDING',
+      frequency: 'ONCE' // Каждый пост в пачке — разовый
+    };
+
+    ctx.session.activeTasks.push(newTask);
+  });
 }
