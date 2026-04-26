@@ -86,6 +86,13 @@ export async function handle_interval_execution(ctx){
   await setInternalTask(ctx, minutes);
 }
 
+export async function setIntervalTasks(ctx){
+  const minutes = ctx.message.text;
+  if (isNaN(minutes) || minutes <= 0) {
+    return ctx.reply('⚠️ Пожалуйста, введите положительное число минут (например, 120).');
+  }
+}
+
 export async function setInternalTask(ctx: any, minutes: number){
   // Устанавливаем время первого запуска — прямо сейчас + интервал
   const scheduledAt = Date.now() + minutes * 60000;
@@ -101,6 +108,13 @@ export async function setInternalTask(ctx: any, minutes: number){
     Markup.inlineKeyboard([[Markup.button.callback('🚀 Перейти к генерации ИИ', 'process_ai_start')]])
   );
   
+}
+
+export async function set_random_interval(ctx){
+  const message = ctx.message.text;
+  const datetime = message.match(/(\d{1,2})+([m|h|d])/);
+  console.log('datetime', datetime);
+  //ctx.session.draft.intervalMs = 
 }
 
 export async function handle_generate_image(ctx: botContext){

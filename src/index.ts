@@ -14,7 +14,7 @@ const { Telegraf, Markup, session } = telegraf;
 
 const getMainMenu = () => {
   return Markup.keyboard([
-    ['📝 Создать пост', '⚙️ Настроить площадки'],
+    ['📝 Создать пост', '📦 Массовое создание', '⚙️ Настроить площадки'],
     ['📊 Активные рассылки', '🆘 Помощь']
   ]).resize();
 };

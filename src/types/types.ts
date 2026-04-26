@@ -35,7 +35,9 @@ export const BotState = {
   AWAITING_INTERVAL_VALUE: 'AWAITING_INTERVAL_VALUE',
   AWAITING_SCHEDULE: 'AWAITING_SCHEDULE',
   AWAITING_POST_IMAGE_UPLOAD: 'AWAITING_POST_IMAGE_UPLOAD',
-  AWAITING_POST_IMAGE_PROMPT: 'AWAITING_POST_IMAGE_PROMPT'
+  AWAITING_POST_IMAGE_PROMPT: 'AWAITING_POST_IMAGE_PROMPT',
+  AWAITING_RANDOM_INTERVAL_DATETIME: 'AWAITING_RANDOM_INTERVAL_DATETIME',
+  AWAITING_POST_PERIOD: 'AWAITING_POST_PERIOD'
 } as const
 
 export type BotState = typeof BotState[keyof typeof BotState];
@@ -55,6 +57,8 @@ export interface MassDraftItem {
   imageFileId?: string;
 }
 
+type FREQ_MODE_TYPE = 'REGULAR' | 'RANDOM';
+
 export interface PostDraft {
   rawText?: string;
   text?: string;
@@ -66,8 +70,9 @@ export interface PostDraft {
   imageUrl?: string;    // Если сгенерировал ИИ
   imagePrompt?: string; // Промпт для генерации
   selectedPlatforms: string[];
-  frequency?: PostFrequency;
-  intervalValue?: number; // В минутах или часах
+  frequency?: PostFrequency | 'string';
+  intervalValue?: string; // В минутах или часах
+  freqmode?: string;
   scheduledAt?: string;
   massItems?: MassDraftItem[]; 
   isMassMode?: boolean;

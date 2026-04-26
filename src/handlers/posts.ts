@@ -5,7 +5,7 @@ import telegraf from 'telegraf';
 import AIContentService from '../services/aiContentMaker.ts'
 
 import {PostKeyboards} from '../keyboards/post.kb.ts'
-import {startEditPost, handle_post_period, handle_post_text, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
+import {startEditPost, handle_post_period, handle_post_text, set_random_interval, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
 
 const postModule = new Composer<botContext>();
 const { Telegraf, Markup, session } = telegraf;
@@ -302,12 +302,33 @@ postModule.action(/^toggle_post_plt_(.+)$/, async (ctx) => {
 });
 
 postModule.action('process_post_datetime', (ctx)=>{
-  console.log('Пеерд датой', ctx.session.draft);
   console.log(`[Check] Переход к дате. FileID в сессии: ${ctx.session.draft?.imageFileId}`);
   ctx.session.state = BotState.AWAITING_POST_DATETIME;
-  ctx.reply('Теперь выберите с какой периодичностью отправлять пост в выбранные соцсети:', PostKeyboards.frequency())
-  //getFrequencyMenu());
+  if(ctx.session.draft.isMassMode){
+    ctx.reply('Выберите временной режим отправки постов', PostKeyboards.type_frequency());
+  }
+  else{
+    ctx.reply('Теперь выберите с какой периодичностью отправлять пост в выбранные соцсети:', PostKeyboards.frequency())
+  }
 });
+
+// пользователь выбрал регулярный постинг иил в случайное время 
+postModule.action(/^freqmode_(.+)$/, (ctx) => {
+  const freqmode = ctx.match[1];
+  ctx.session.state = BotState.AWAITING_POST_PERIOD;
+  ctx.session.draft.freqmode = freqmode;
+  ctx.reply('Введите интервал времени, через который пост может быть опубликован', PostKeyboards.mass_frequency());
+})
+
+postModule.action(/^mfreq_(.+)$/, (ctx) => {
+  const freq = ctx.match[1];
+  ctx.session.draft.intervalValue = freq;
+  if(freq === "CUSTOM"){
+    ctx.session.state = BotState.AWAITING_RANDOM_INTERVAL_DATETIME;
+    return true;
+  }
+  
+})
 
 
 // обработка сообщений пользователя
@@ -329,6 +350,10 @@ postModule.on('message', async (ctx, next) => {
 
   if(ctx.session.state === BotState.AWAITING_POST_IMAGE_PROMPT && 'text' in ctx.message){
     await handle_generate_image(ctx);
+  }
+
+  if(ctx.session.state === BotState.AWAITING_POST_PERIOD && 'text' in ctx.message){
+    await set_random_interval(ctx);
   }
   
   return next();
