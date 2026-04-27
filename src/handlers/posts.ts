@@ -5,7 +5,7 @@ import telegraf from 'telegraf';
 import AIContentService from '../services/aiContentMaker.ts'
 
 import {PostKeyboards} from '../keyboards/post.kb.ts'
-import {startEditPost, handle_post_period, handle_post_text, set_random_interval, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
+import {startEditPost, handle_post_period, handle_post_text, set_post_interval, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
 
 const postModule = new Composer<botContext>();
 const { Telegraf, Markup, session } = telegraf;
@@ -316,17 +316,31 @@ postModule.action('process_post_datetime', (ctx)=>{
 postModule.action(/^freqmode_(.+)$/, (ctx) => {
   const freqmode = ctx.match[1];
   ctx.session.state = BotState.AWAITING_POST_PERIOD;
-  ctx.session.draft.freqmode = freqmode;
+  ctx.session.draft.scheduleMode = freqmode;
   ctx.reply('Введите интервал времени, через который пост может быть опубликован', PostKeyboards.mass_frequency());
 })
 
 postModule.action(/^mfreq_(.+)$/, (ctx) => {
   const freq = ctx.match[1];
-  ctx.session.draft.intervalValue = freq;
-  if(freq === "CUSTOM"){
-    ctx.session.state = BotState.AWAITING_RANDOM_INTERVAL_DATETIME;
-    return true;
+  
+  switch(freq){
+    case "HOUR": 
+      ctx.session.draft.intervalValue = "1h";
+      break;
+    case "DAY":
+      ctx.session.draft.intervalValue = "1d";
+      break;
+    case "3DAY":
+      ctx.session.draft.intervalValue = "3d";
+      break;
+    case "WEEK":
+      ctx.session.draft.intervalValue = "7d";
+      break;
+    case "MONTH":
+      ctx.session.draft.intervalValue = "1m";
+      break;
   }
+  set_post_interval(ctx);
   
 })
 
@@ -353,7 +367,7 @@ postModule.on('message', async (ctx, next) => {
   }
 
   if(ctx.session.state === BotState.AWAITING_POST_PERIOD && 'text' in ctx.message){
-    await set_random_interval(ctx);
+    await set_post_interval(ctx);
   }
   
   return next();

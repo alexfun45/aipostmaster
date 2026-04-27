@@ -4,6 +4,7 @@ import telegraf from 'telegraf';
 const { Telegraf, Markup, session } = telegraf;
 import { ImageAiService } from '../services/imageAi.service.ts';
 import {PostKeyboards} from '../keyboards/post.kb.ts'
+import {parseFullDate, parseIntervalToMs} from '../utils/time.ts'
 
 const imageAi = new ImageAiService();
 
@@ -76,7 +77,7 @@ export async function handle_post_text(ctx: botContext){
   await ctx.reply('📝 Текст принят!\nТеперь выберите режим контента:', PostKeyboards.contentMode());
 }
 
-export async function handle_interval_execution(ctx){
+export async function handle_interval_execution(ctx: botContext){
   const minutes = parseInt(ctx.message.text);
 
   if (isNaN(minutes) || minutes <= 0) {
@@ -86,7 +87,7 @@ export async function handle_interval_execution(ctx){
   await setInternalTask(ctx, minutes);
 }
 
-export async function setIntervalTasks(ctx){
+export async function setIntervalTasks(ctx: botContext){
   const minutes = ctx.message.text;
   if (isNaN(minutes) || minutes <= 0) {
     return ctx.reply('⚠️ Пожалуйста, введите положительное число минут (например, 120).');
@@ -100,7 +101,6 @@ export async function setInternalTask(ctx: any, minutes: number){
   ctx.session.draft.scheduledAt = scheduledAt;
   ctx.session.draft.intervalMs = minutes * 60000; // Сохраняем интервал для повторов
   ctx.session.draft.frequency = 'INTERVAL';
-  //ctx.session.state = BotState.IDLE;
 
   await ctx.reply(
     `✅ Интервал установлен: повтор каждые ${minutes} мин.\n` +
@@ -110,12 +110,21 @@ export async function setInternalTask(ctx: any, minutes: number){
   
 }
 
-export async function set_random_interval(ctx){
-  const message = ctx.message.text;
-  const datetime = message.match(/(\d{1,2})+([m|h|d])/);
-  console.log('datetime', datetime);
-  //ctx.session.draft.intervalMs = 
-}
+// получение и установка интервала, в течение которого может быть опубликован следующий пост при массовом постинге
+export async function set_post_interval(ctx: botContext){
+  try{
+    ctx.session.draft.intervalMs = parseIntervalToMs(ctx.message.text);
+  }catch(error){
+    return ctx.reply(error.message);
+  }
+  ctx.session.state = BotState.AWAITING_POST_DATETIME;
+  await ctx.reply(
+    '📅 Укажите дату и время первого запуска в формате:\n' +
+    '`ДД.ММ.ГГГГ ЧЧ:ММ` (например, `15.04.2026 14:30`)\n\n' +
+    'Я проверю, чтобы время не было в прошлом.',
+    { parse_mode: 'Markdown' }
+  );
+  }
 
 export async function handle_generate_image(ctx: botContext){
   const prompt = ctx.message.text;
@@ -180,7 +189,7 @@ export async function pushCurrentItemToMass(ctx: any) {
   }
 }
 
-// Финальное создание задач из "корзины"
+// Финальное создание задач из набора
 export async function scheduleMassQueue(ctx: any) {
   const { massItems, scheduledAt, intervalMs, selectedPlatforms } = ctx.session.draft;
   const startTs = new Date(scheduledAt).getTime();

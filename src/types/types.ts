@@ -71,8 +71,9 @@ export interface PostDraft {
   imagePrompt?: string; // Промпт для генерации
   selectedPlatforms: string[];
   frequency?: PostFrequency | 'string';
-  intervalValue?: string; // В минутах или часах
-  freqmode?: string;
+  intervalValue?: string; 
+  intervalMs?: string | number;
+  scheduleMode?: string; // режим выбора времени при массовом автопостинге(REGUAL - в одно время или RANDOM - в случайное)
   scheduledAt?: string;
   massItems?: MassDraftItem[]; 
   isMassMode?: boolean;
