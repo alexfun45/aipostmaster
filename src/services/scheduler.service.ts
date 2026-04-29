@@ -54,11 +54,10 @@ async function executeTask(bot: any, task: any) {
   console.log(`[Scheduler] Задача ID: ${task.id}`);
   console.log(`[Scheduler] Данные медиа: FileID="${task.imageFileId}", Source="${task.imageSource}"`);
   for (const res of results) {
+    let finalCaption = "";
     try {
       if (res.type === 'TELEGRAM') {
         let content = res.content;
-        console.log('получил задачу', task);
-        console.log('res', res);
         if(isDynamic){
           try {
             // Вызываем ИИ заново, используя исходный текст задачи
@@ -67,32 +66,47 @@ async function executeTask(bot: any, task: any) {
             console.error('Ошибка динамической генерации, использую старый текст');
           }
         }
-        const finalCaption = content.substring(0, 1021) + "...";
+        finalCaption = content.substring(0, 4096) + "..."; 
         if (imageFileId) {
           console.log(`[Scheduler] Шлю ФОТО (file_id) в ${res.platformId}`);
           await bot.telegram.sendPhoto(res.platformId, imageFileId, { 
-            caption: finalCaption,
-            parse_mode: 'Markdown' 
+            //caption: finalCaption,
+            //parse_mode: 'HTML' 
           });
+          await bot.telegram.sendMessage(res.platformId, finalCaption, { 
+            parse_mode: 'HTML' 
+          })
         } 
-        // Если вдруг остался только URL (например, из другого сервиса)
         else if (imageUrl) {
           await bot.telegram.sendPhoto(res.platformId, imageUrl, { 
-            caption: finalCaption,
-            parse_mode: 'Markdown' 
+            //caption: finalCaption,
+            //parse_mode: 'HTML' 
           });
+          await bot.telegram.sendMessage(res.platformId, finalCaption, { 
+            parse_mode: 'HTML' 
+          })
         } 
         // Если вообще ничего нет
         else {
           console.log(`[Scheduler] Шлю ТОЛЬКО ТЕКСТ в ${res.platformId}`);
           await bot.telegram.sendMessage(res.platformId, finalCaption, { 
-            parse_mode: 'Markdown' 
+            parse_mode: 'HTML' 
           });
         }
       }
       console.log(`✅ Отправлено в ${res.type}`);
     } catch (e) {
+      if (e.description?.includes('can\'t parse entities')) {
+        console.error('Ошибка разметки ИИ, шлю чистым текстом...');
+        finalCaption = res.content.substring(0, 1020) + "..."; 
+        // 3. Фолбэк: если разметка битая, очищаем её регуляркой и шлем без parse_mode
+        const cleanText = finalCaption.replace(/[*_`]/g, '');
+        return await bot.telegram.sendPhoto(res.platformId, imageFileId, {
+          caption: cleanText
+        });
+      }
       console.error(`❌ Ошибка отправки на ${res.platformId}:`, e);
+      throw e;
     }
   }
 }

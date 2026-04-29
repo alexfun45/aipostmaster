@@ -29,7 +29,7 @@ export class AIContentService {
   async adaptContent(originalText: string, platformType: AvailableSocialPlatform): Promise<string> {
 
     const instructions = {
-      [AvailableSocialPlatform.TELEGRAM]: "Сделай пост структурированным, используй эмодзи и Markdown. Сохраняй абзацы.",
+      [AvailableSocialPlatform.TELEGRAM]: "Сделай пост структурированным, используй эмодзи и html. Сохраняй абзацы.",
       [AvailableSocialPlatform.VK]: "Напиши пост в дружелюбном стиле, добавь призыв к обсуждению в комментариях.",
       [AvailableSocialPlatform.INSTAGRAM]: "Сделай текст коротким, ярким, добавь 5-10 релевантных хештегов в конце."
     };

@@ -216,12 +216,19 @@ export async function scheduleMassQueue(ctx: any) {
     ctx.session.activeTasks.push(newTask);
   });
 
-  const timeStr = startTs 
-      ? new Date(startTs).toLocaleString('ru-RU') 
+  let timeStr = startTs 
+      ? new Date(startTs).toLocaleString('ru-RU', { 
+        timeZone: 'Europe/Moscow', // Твой часовой пояс
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) 
       : 'немедленно';
-  
+
   await ctx.editMessageText(
-        `🚀 *Посты успешно запланирован!*\n\n` +
+        `🚀 *Посты успешно запланированы!*\n\n` +
         `📅 Время старта: ${timeStr}\n` +
         `Вы можете просмотреть свои активные рассылки в главном меню.`,
         { parse_mode: 'Markdown' }

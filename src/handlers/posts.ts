@@ -68,7 +68,14 @@ postModule.hears('📊 Активные рассылки', async (ctx) => {
   await ctx.reply('📋 Ваши активные рассылки:');
 
   for (const task of pendingTasks) {
-    const dateStr = new Date(task.scheduledAt).toLocaleString('ru-RU');
+    const dateStr = new Date(task.scheduledAt).toLocaleString('ru-RU', { 
+      timeZone: 'Europe/Moscow', // Твой часовой пояс
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
     const platforms = task.results.map((r: any) => r.type).join(', ');
     
     // Короткое превью текста
@@ -396,7 +403,7 @@ postModule.on('photo', async (ctx, next) => {
   if (ctx.session.state !== BotState.AWAITING_POST_IMAGE_UPLOAD || !ctx.message.photo) {
     return next();
   }
-
+  console.log('принял загрузку фото')
   // Телеграм присылает массив разных размеров, берем самый большой (последний)
   const photo = ctx.message.photo[ctx.message.photo.length - 1];
   
@@ -405,6 +412,7 @@ postModule.on('photo', async (ctx, next) => {
     await pushCurrentItemToMass(ctx);
 
     const count = ctx.session.draft.massItems.length;
+
     await ctx.reply(`✅ Изображение загружено!`, Markup.inlineKeyboard([
       [Markup.button.callback('➕ Добавить еще пост', 'mass_add_next')],
       [Markup.button.callback('⚙️ Перейти к настройке всей пачки', 'process_mass_setup')]
@@ -412,14 +420,15 @@ postModule.on('photo', async (ctx, next) => {
   } else {
     ctx.session.draft.imageFileId = photo.file_id;
     ctx.session.state = BotState.IDLE;
+    // Показываем превью и переходим к площадкам
+    await ctx.replyWithPhoto(photo.file_id, {
+      caption: 'Ваш пост будет выглядеть так.\nТеперь выберите площадки:',
+      ...PostKeyboards.platforms(ctx.session.platforms, [])
+    });
   }
   
   
-  // Показываем превью и переходим к площадкам
-  await ctx.replyWithPhoto(photo.file_id, {
-    caption: 'Ваш пост будет выглядеть так.\nТеперь выберите площадки:',
-    ...PostKeyboards.platforms(ctx.session.platforms, [])
-  });
+  
 });
 
 postModule.action('mass_add_next', async (ctx) => {
