@@ -120,7 +120,7 @@ postModule.action(/^freq_(.+)$/, async (ctx) => {
   ctx.session.state = BotState.AWAITING_POST_DATETIME;
   await ctx.reply(
     '📅 Укажите дату и время первого запуска в формате:\n' +
-    '`ДД.ММ.ГГГГ ЧЧ:ММ` (например, `15.04 14:30`)\n\n' +
+    '`ДД.ММ ЧЧ:ММ` (например, `15.04 14:30`)\n\n' +
     'Я проверю, чтобы время не было в прошлом.',
     { parse_mode: 'Markdown' }
   );
@@ -156,94 +156,12 @@ postModule.action('process_ai_start', async (ctx) => {
     ? massItems?.every(item => item.results && item.results.length > 0)
     : (singleResults && singleResults.length > 0);
     
-  console.log('hasResults', hasResults);
 
   if (hasResults) {
     // Если результаты есть, просто вызываем функцию отрисовки (ниже)
     return await showAiPreview(ctx); 
   }
-  runAiGeneration(ctx);
-  return true;
-  await ctx.answerCbQuery('🤖 Магия ИИ началась...');
-  const statusMessage = await ctx.reply('⏳ Адаптирую контент под площадки... Это может занять время.');
-
-  try {
-    if (isMassMode) {
-      // --- ЛОГИКА ДЛЯ МАССОВОГО РЕЖИМА ---
-      for (const item of massItems) {
-        item.results = []; // Создаем поле results внутри каждого элемента
-        
-        for (const platformId of selectedPlatforms) {
-          const platform = allPlatforms.find(p => p.internalId === platformId);
-          if (!platform) continue;
-
-          // Адаптируем текст конкретного элемента
-          const adaptedText = await aiService.adaptContent(item.text, platform.type);
-          
-          item.results.push({
-            platformId: platform.internalId,
-            type: platform.type,
-            content: adaptedText
-          });
-        }
-      }
-
-      /*await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
-      
-      const summary = `✅ Обработано постов: *${massItems.length}*\nПлатформ для каждого: *${selectedPlatforms.length}*\n\nВсе тексты успешно адаптированы ИИ.`;
-      
-      await ctx.reply(summary, {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('📊 Предпросмотр всей пачки', 'mass_preview_all')],
-          [Markup.button.callback('✅ Всё верно, запланировать', 'post_confirm')],
-          [Markup.button.callback('❌ Отмена', 'cancel_post')]
-        ])
-      });
-      */
-    } else {
-      const results = [];
-      // Проходим по ID выбранных площадок
-      for (const platformId of selectedPlatforms) {
-        const platform = allPlatforms.find(p => p.internalId === platformId);
-        if (!platform) continue;
-
-        // Вызываем наш ИИ сервис
-        const adaptedText = await aiService.adaptContent(rawText, platform.type);
-        
-        results.push({
-          platformId: platform.internalId,
-          title: platform.title,
-          type: platform.type,
-          content: adaptedText
-        });
-      }
-
-      // Сохраняем в сессию, чтобы потом отправить при подтверждении
-      ctx.session.draft.results = results;
-
-     /*
-      let previewText = "📋 *Предпросмотр постов:*\n\n";
-      results.forEach(res => {
-        previewText += `📍 *${res.type}: ${res.title}*\n---\n${res.content}\n\n`;
-      });
-      
-    await ctx.reply(previewText, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('✅ Всё верно, запланировать', 'post_confirm')],
-        [Markup.button.callback('🔄 Перегенерировать', 'process_ai_start')],
-        [Markup.button.callback('❌ Отмена', 'cancel_post')]
-      ])
-    });*/
-    
-  }
-  await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
-  await showAiPreview(ctx);
-  } catch (error) {
-    console.error('AI Error:', error);
-    await ctx.reply('❌ Произошла ошибка при генерации контента. Попробуйте позже.');
-  }
+  await runAiGeneration(ctx);
 });
 
 
@@ -259,13 +177,15 @@ postModule.action('reprocess_ai', async (ctx) => {
 });
 
 postModule.action('mass_preview_all', async (ctx) => {
-  const { massItems } = ctx.session.draft;
+  const currentMassItems = ctx.session.draft?.massItems;
 
-  if (!massItems || massItems.length === 0) {
+  console.log('mass_preview_all', currentMassItems);
+
+  if (!currentMassItems || currentMassItems.length === 0) {
     return ctx.answerCbQuery('⚠️ Очередь пуста');
   }
 
-  const previewText = generateMassPreviewText(massItems);
+  const previewText = generateMassPreviewText(ctx);
 
   await ctx.editMessageText(previewText, {
     parse_mode: 'Markdown',

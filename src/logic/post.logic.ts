@@ -107,7 +107,7 @@ export async function set_post_interval(ctx: botContext){
   ctx.session.state = BotState.AWAITING_POST_DATETIME;
   await ctx.reply(
     '📅 Укажите дату и время первого запуска в формате:\n' +
-    '`ДД.ММ.ГГГГ ЧЧ:ММ` (например, `15.04 14:30`)\n\n' +
+    '`ДД.ММ ЧЧ:ММ` (например, `15.04 14:30`)\n\n' +
     'Я проверю, чтобы время не было в прошлом.',
     { parse_mode: 'Markdown' }
   );
@@ -239,18 +239,24 @@ export async function runAiGeneration(ctx: any) {
   try {
     if (isMassMode) {
       for (const item of massItems) {
-        item.results = [];
+        const currentResults = [];
         for (const platformId of selectedPlatforms) {
           const platform = allPlatforms.find(p => p.internalId === platformId);
           if (!platform) continue;
+          //console.log(`генерирую пост для текста: ${item.text}`);
           const adaptedText = await aiService.adaptContent(item.text, platform.type);
-          item.results.push({
+          //console.log(`Сгенерировал: ${adaptedText}`);
+          currentResults.push({
             platformId: platform.internalId,
             type: platform.type,
             content: adaptedText
           });
         }
+        item.results = currentResults;       
       }
+      const updatedMassItems = JSON.parse(JSON.stringify(massItems));
+      ctx.session.draft = Object.assign({}, ctx.session.draft, { massItems: updatedMassItems });
+      console.log('✅ Данные записаны в сессию:', ctx.session.draft.massItems);
     } else {
       const results = [];
       for (const platformId of selectedPlatforms) {
@@ -272,9 +278,10 @@ export async function runAiGeneration(ctx: any) {
   }
 }
 
-export function generateMassPreviewText(massItems: any[]): string {
+export function generateMassPreviewText(ctx): string {
   let text = "📊 *Предпросмотр адаптированных постов*\n\n";
-
+  const massItems = ctx.session.draft?.massItems;
+  console.log('PREVIEW DEBUG:', massItems);
   massItems.forEach((item, index) => {
     // Берем контент из первого результата (обычно это основная платформа)
     // Если ИИ еще не отработал, берем исходный raw-текст
@@ -303,6 +310,7 @@ export async function showAiPreview(ctx) {
   const { isMassMode, massItems, results } = ctx.session.draft;
 
   if (isMassMode) {
+    console.log('show ai preview massItems', massItems);
     const summary = `✅ Все тексты (постов: ${massItems.length}) адаптированы ИИ и готовы к проверке.`;
     await ctx.reply(summary, {
       parse_mode: 'Markdown',
