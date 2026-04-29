@@ -2,6 +2,7 @@ import { Telegraf } from 'telegraf';
 import Redis from 'redis';
 import type { botContext } from '../types/types.ts';
 import AIContentService from '../services/aiContentMaker.ts'
+import 'dotenv/config'
 
 const aiService = new AIContentService();
 
@@ -108,6 +109,36 @@ async function executeTask(bot: any, task: any) {
       console.error(`❌ Ошибка отправки на ${res.platformId}:`, e);
       throw e;
     }
+  }
+}
+
+async function postToVkWall(message: string, ownerId: string, accessToken: string) {
+  // 1. Очищаем текст от HTML-тегов, так как ВК их не поддерживает
+  const cleanMessage = message.replace(/<\/?[^>]+(>|$)/g, "");
+
+  const url = 'https://api.vk.com/method/wall.post';
+  
+  // Параметры запроса
+  const data = new URLSearchParams();
+  data.append('owner_id', ownerId); // Например, '-210...''
+  data.append('from_group', '1');   // Постим от имени группы
+  data.append('message', cleanMessage);
+  data.append('access_token', process.env.VK_ACCESS_TOKEN);
+  data.append('v', '5.131');        // Версия API ВК
+
+  try {
+    const response = await axios.post(url, data);
+    
+    if (response.data.error) {
+      console.error('Ошибка VK API:', response.data.error);
+      throw new Error(response.data.error.error_msg);
+    }
+    
+    console.log('Пост в ВК опубликован! ID:', response.data.response.post_id);
+    return response.data.response.post_id;
+  } catch (error) {
+    console.error('Ошибка при публикации в ВК:', error);
+    throw error;
   }
 }
 

@@ -15,7 +15,7 @@
     "@langchain/openai": "^1.4.3",
     "@telegraf/session": "^2.0.0-beta.7",
     "@types/redis": "^4.0.10",
-    "axios": "^1.14.0",
+    "axios": "^1.15.2",
     "dayjs": "^1.11.20",
     "dotenv": "^17.4.1",
     "generic-pool": "^3.9.0",
