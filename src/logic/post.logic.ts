@@ -4,8 +4,10 @@ import telegraf from 'telegraf';
 const { Telegraf, Markup, session } = telegraf;
 import { ImageAiService } from '../services/imageAi.service.ts';
 import {PostKeyboards} from '../keyboards/post.kb.ts'
-import {parseFullDate, parseIntervalToMs} from '../utils/time.ts'
+import {parseFullDate, parseIntervalToMs, parseUserDateTime} from '../utils/time.ts'
+import AIContentService from '../services/aiContentMaker.ts'
 
+const aiService = new AIContentService();
 const imageAi = new ImageAiService();
 
 export async function startEditPost(ctx: botContext){
@@ -17,31 +19,15 @@ export async function startEditPost(ctx: botContext){
 
 export async function handle_post_period(ctx: botContext){
   const dtText = ctx.message.text;
-    
-  // Регулярка для проверки формата ДД.ММ.ГГГГ ЧЧ:ММ
-  const dtRegex = /^(\d{2})\.(\d{2})\.(\d{4})\s(\d{2}):(\d{2})$/;
-  const match = dtText.match(dtRegex);
-
-  if (!match) {
-    return ctx.reply('❌ Неверный формат! Напишите дату вот так: `15.04.2026 14:30`');
+  let scheduledDate;
+  try{
+    //scheduledDate = parseFullDate(dtText);
+    scheduledDate = parseUserDateTime(dtText);
+    ctx.session.draft.scheduledAt = scheduledDate;
+  } catch(error){
+    return ctx.reply(error.message);
   }
 
-  const [_, day, month, year, hour, minute] = match;
-  const scheduledDate = new Date(+year, +month - 1, +day, +hour, +minute);
-  const now = new Date();
-
-  // Проверка на корректность даты (например, 32 января)
-  if (isNaN(scheduledDate.getTime())) {
-    return ctx.reply('❌ Похоже, такой даты не существует. Проверьте числа.');
-  }
-
-  // Проверка на будущее время
-  if (scheduledDate <= now) {
-    return ctx.reply('❌ Время должно быть в будущем! Сейчас: ' + now.toLocaleString('ru-RU'));
-  }
-
-  // Сохраняем в сессию
-  ctx.session.draft.scheduledAt = scheduledDate.toISOString();
   ctx.session.state = BotState.AWAITING_SCHEDULE;
 
   await ctx.reply(
@@ -114,13 +100,14 @@ export async function setInternalTask(ctx: any, minutes: number){
 export async function set_post_interval(ctx: botContext){
   try{
     ctx.session.draft.intervalMs = parseIntervalToMs(ctx.message.text);
-  }catch(error){
+    ctx.session.draft.frequency = ctx.message.text;
+  } catch(error){
     return ctx.reply(error.message);
   }
   ctx.session.state = BotState.AWAITING_POST_DATETIME;
   await ctx.reply(
     '📅 Укажите дату и время первого запуска в формате:\n' +
-    '`ДД.ММ.ГГГГ ЧЧ:ММ` (например, `15.04.2026 14:30`)\n\n' +
+    '`ДД.ММ.ГГГГ ЧЧ:ММ` (например, `15.04 14:30`)\n\n' +
     'Я проверю, чтобы время не было в прошлом.',
     { parse_mode: 'Markdown' }
   );
@@ -193,24 +180,152 @@ export async function pushCurrentItemToMass(ctx: any) {
 export async function scheduleMassQueue(ctx: any) {
   const { massItems, scheduledAt, intervalMs, selectedPlatforms } = ctx.session.draft;
   const startTs = new Date(scheduledAt).getTime();
-
+  const isRandom = ctx.session.draft.scheduleMode === 'RANDOM';
+  const baseInterval = ctx.session.draft.intervalMs;
   massItems.forEach((item: any, index: number) => {
+    let currentPostTime: number;
     const taskTs = startTs + (index * (intervalMs || 0));
     
+    if (index === 0) {
+      currentPostTime = startTs; // Первый пост всегда в указанное время
+    } else {
+      if (isRandom) {
+        // Генерируем разброс +/- 20%
+        const jitterPercent = 0.2; 
+        const jitter = (Math.random() * 2 - 1) * (baseInterval * jitterPercent);
+        currentPostTime = startTs + baseInterval + jitter;
+      } else {
+        currentPostTime = startTs + baseInterval;
+      }
+    }
+
     const newTask = {
       id: `m_${Date.now()}_${index}`,
       userId: ctx.from.id,
       // Массовые посты пока шлем "как есть", адаптируя под площадки
-      results: selectedPlatforms.map((pId: string) => {
+      results: item.results, /*selectedPlatforms.map((pId: string) => {
         const plt = ctx.session.platforms.find((p: any) => p.internalId === pId);
-        return { platformId: pId, type: plt.type, content: item.text };
-      }),
+        return { platformId: pId, type: plt.type, content: item.content };
+      }),*/
       imageFileId: item.imageFileId || null,
-      scheduledAt: taskTs,
+      scheduledAt: currentPostTime,
       status: 'PENDING',
       frequency: 'ONCE' // Каждый пост в пачке — разовый
     };
-
+    ctx.session.activeTasks ??= [];
     ctx.session.activeTasks.push(newTask);
   });
+
+  const timeStr = startTs 
+      ? new Date(startTs).toLocaleString('ru-RU') 
+      : 'немедленно';
+  
+  await ctx.editMessageText(
+        `🚀 *Посты успешно запланирован!*\n\n` +
+        `📅 Время старта: ${timeStr}\n` +
+        `Вы можете просмотреть свои активные рассылки в главном меню.`,
+        { parse_mode: 'Markdown' }
+      );
+  
+}
+
+export async function runAiGeneration(ctx: any) {
+  const { isMassMode, massItems, rawText, selectedPlatforms } = ctx.session.draft;
+  const allPlatforms = ctx.session.platforms || [];
+
+  await ctx.answerCbQuery('🤖 Магия ИИ началась...');
+  const statusMessage = await ctx.reply('⏳ Адаптирую контент... Пожалуйста, подождите.');
+
+  try {
+    if (isMassMode) {
+      for (const item of massItems) {
+        item.results = [];
+        for (const platformId of selectedPlatforms) {
+          const platform = allPlatforms.find(p => p.internalId === platformId);
+          if (!platform) continue;
+          const adaptedText = await aiService.adaptContent(item.text, platform.type);
+          item.results.push({
+            platformId: platform.internalId,
+            type: platform.type,
+            content: adaptedText
+          });
+        }
+      }
+    } else {
+      const results = [];
+      for (const platformId of selectedPlatforms) {
+        const platform = allPlatforms.find(p => p.internalId === platformId);
+        if (!platform) continue;
+        const adaptedText = await aiService.adaptContent(rawText!, platform.type);
+        results.push({ platformId: platform.internalId, title: platform.title, type: platform.type, content: adaptedText });
+      }
+      ctx.session.draft.results = results;
+    }
+
+    // Удаляем лоадер и показываем результат
+    await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+    await showAiPreview(ctx);
+
+  } catch (error) {
+    console.error('AI Error:', error);
+    await ctx.reply('❌ Ошибка при генерации контента.');
+  }
+}
+
+export function generateMassPreviewText(massItems: any[]): string {
+  let text = "📊 *Предпросмотр адаптированных постов*\n\n";
+
+  massItems.forEach((item, index) => {
+    // Берем контент из первого результата (обычно это основная платформа)
+    // Если ИИ еще не отработал, берем исходный raw-текст
+    const aiContent = item.results && item.results.length > 0 
+      ? item.results[0].content 
+      : item.text;
+
+    // Очищаем текст от Markdown-разметки для превью, чтобы не сломать отображение списка
+    const cleanText = aiContent
+      .replace(/[*_`]/g, '') // Убираем жирный, курсив и код
+      .substring(0, 200)      // Берем чуть больше символов для наглядности
+      .trim();
+
+    const hasImage = item.imageFileId ? "🖼️" : "📝";
+    const platforms = item.results?.map((r: any) => r.type).join(', ') || 'не адаптировано';
+
+    text += `*${index + 1}.* ${hasImage} ${cleanText}...\n`;
+    text += `   └ _Площадки: ${platforms}_\n\n`;
+  });
+
+  text += `_Всего в очереди: ${massItems.length}_`;
+  return text;
+}
+
+export async function showAiPreview(ctx) {
+  const { isMassMode, massItems, results } = ctx.session.draft;
+
+  if (isMassMode) {
+    const summary = `✅ Все тексты (постов: ${massItems.length}) адаптированы ИИ и готовы к проверке.`;
+    await ctx.reply(summary, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('📊 Предпросмотр всей пачки', 'mass_preview_all')],
+        [Markup.button.callback('🔄 Перегенерировать всё', 'reprocess_ai')], // Новая кнопка
+        [Markup.button.callback('✅ Всё верно, запланировать', 'post_confirm')],
+        [Markup.button.callback('❌ Отмена', 'cancel_post')]
+      ])
+    });
+  } else {
+    let previewText = "📋 *Предпросмотр поста:*\n\n";
+    results.forEach(res => {
+      previewText += `📍 *${res.type}*\n---\n${res.content}\n\n`;
+    });
+
+    await ctx.reply(previewText, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Всё верно, запланировать', 'post_confirm')],
+        [Markup.button.callback('🔄 Перегенерировать', 'reprocess_ai')],
+        [Markup.button.callback('❌ Отмена', 'cancel_post')]
+      ])
+    });
+  }
 }

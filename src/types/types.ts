@@ -54,10 +54,18 @@ export type PostFrequency = typeof PostFrequency[keyof typeof PostFrequency];
 
 export interface MassDraftItem {
   text: string;
+  platformId: string;
   imageFileId?: string;
+  results: result_type[]
 }
 
 type FREQ_MODE_TYPE = 'REGULAR' | 'RANDOM';
+
+type result_type = {
+  platformId: string,
+  type: string,
+  content: string
+}
 
 export interface PostDraft {
   rawText?: string;
@@ -76,6 +84,7 @@ export interface PostDraft {
   scheduleMode?: string; // режим выбора времени при массовом автопостинге(REGUAL - в одно время или RANDOM - в случайное)
   scheduledAt?: string;
   massItems?: MassDraftItem[]; 
+  results?: result_type[];
   isMassMode?: boolean;
   currentItem?: {
     text: string;
@@ -86,7 +95,7 @@ export interface PostDraft {
 type typeBotState = typeof BotState[keyof typeof BotState];
 
 export interface UserPlatform {
-  type: 'TELEGRAM' | 'VK' | 'TWITTER';
+  type: AvailableSocialPlatform;
   internalId: string;    // ID в самой соцсети (например, -100...)
   title: string;         // Название (например, "Мой лайфстайл блог")
   accessToken?: string;  // Токен (нужен для VK/Twitter, для TG не нужен)

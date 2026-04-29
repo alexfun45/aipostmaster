@@ -16,7 +16,8 @@ const getMainMenu = () => {
   return Markup.keyboard([
     ['📝 Создать пост', '📦 Массовое создание', '⚙️ Настроить площадки'],
     ['📊 Активные рассылки', '🆘 Помощь']
-  ]).resize();
+  ]).resize()
+  .persistent();
 };
 
 //const connectedClient = await initRedis(); 

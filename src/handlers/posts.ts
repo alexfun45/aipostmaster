@@ -5,7 +5,7 @@ import telegraf from 'telegraf';
 import AIContentService from '../services/aiContentMaker.ts'
 
 import {PostKeyboards} from '../keyboards/post.kb.ts'
-import {startEditPost, handle_post_period, handle_post_text, set_post_interval, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
+import {startEditPost, handle_post_period, handle_post_text, showAiPreview, runAiGeneration, generateMassPreviewText, set_post_interval, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
 
 const postModule = new Composer<botContext>();
 const { Telegraf, Markup, session } = telegraf;
@@ -120,7 +120,7 @@ postModule.action(/^freq_(.+)$/, async (ctx) => {
   ctx.session.state = BotState.AWAITING_POST_DATETIME;
   await ctx.reply(
     '📅 Укажите дату и время первого запуска в формате:\n' +
-    '`ДД.ММ.ГГГГ ЧЧ:ММ` (например, `15.04.2026 14:30`)\n\n' +
+    '`ДД.ММ.ГГГГ ЧЧ:ММ` (например, `15.04 14:30`)\n\n' +
     'Я проверю, чтобы время не было в прошлом.',
     { parse_mode: 'Markdown' }
   );
@@ -145,46 +145,89 @@ postModule.action(/^mode_(.+)$/, async (ctx) => {
 
 
 postModule.action('process_ai_start', async (ctx) => {
-  const { rawText, selectedPlatforms } = ctx.session.draft;
+  const { isMassMode, massItems, rawText, selectedPlatforms, results: singleResults } = ctx.session.draft;
   const allPlatforms = ctx.session.platforms || [];
 
   if (!selectedPlatforms || selectedPlatforms.length === 0) {
     return ctx.answerCbQuery('⚠️ Сначала выберите площадки!');
   }
 
+  const hasResults = isMassMode 
+    ? massItems?.every(item => item.results && item.results.length > 0)
+    : (singleResults && singleResults.length > 0);
+    
+  console.log('hasResults', hasResults);
+
+  if (hasResults) {
+    // Если результаты есть, просто вызываем функцию отрисовки (ниже)
+    return await showAiPreview(ctx); 
+  }
+  runAiGeneration(ctx);
+  return true;
   await ctx.answerCbQuery('🤖 Магия ИИ началась...');
-  const statusMessage = await ctx.reply('⏳ Генерирую варианты для выбранных площадок... Пожалуйста, подождите.');
+  const statusMessage = await ctx.reply('⏳ Адаптирую контент под площадки... Это может занять время.');
 
   try {
-    const results = [];
+    if (isMassMode) {
+      // --- ЛОГИКА ДЛЯ МАССОВОГО РЕЖИМА ---
+      for (const item of massItems) {
+        item.results = []; // Создаем поле results внутри каждого элемента
+        
+        for (const platformId of selectedPlatforms) {
+          const platform = allPlatforms.find(p => p.internalId === platformId);
+          if (!platform) continue;
 
-    // Проходим по ID выбранных площадок
-    for (const platformId of selectedPlatforms) {
-      const platform = allPlatforms.find(p => p.internalId === platformId);
-      if (!platform) continue;
+          // Адаптируем текст конкретного элемента
+          const adaptedText = await aiService.adaptContent(item.text, platform.type);
+          
+          item.results.push({
+            platformId: platform.internalId,
+            type: platform.type,
+            content: adaptedText
+          });
+        }
+      }
 
-      // Вызываем наш ИИ сервис
-      const adaptedText = await aiService.adaptContent(rawText, platform.type);
+      /*await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
       
-      results.push({
-        platformId: platform.internalId,
-        title: platform.title,
-        type: platform.type,
-        content: adaptedText
+      const summary = `✅ Обработано постов: *${massItems.length}*\nПлатформ для каждого: *${selectedPlatforms.length}*\n\nВсе тексты успешно адаптированы ИИ.`;
+      
+      await ctx.reply(summary, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('📊 Предпросмотр всей пачки', 'mass_preview_all')],
+          [Markup.button.callback('✅ Всё верно, запланировать', 'post_confirm')],
+          [Markup.button.callback('❌ Отмена', 'cancel_post')]
+        ])
       });
-    }
+      */
+    } else {
+      const results = [];
+      // Проходим по ID выбранных площадок
+      for (const platformId of selectedPlatforms) {
+        const platform = allPlatforms.find(p => p.internalId === platformId);
+        if (!platform) continue;
 
-    // Сохраняем в сессию, чтобы потом отправить при подтверждении
-    ctx.session.draft.results = results;
+        // Вызываем наш ИИ сервис
+        const adaptedText = await aiService.adaptContent(rawText, platform.type);
+        
+        results.push({
+          platformId: platform.internalId,
+          title: platform.title,
+          type: platform.type,
+          content: adaptedText
+        });
+      }
 
-    // Формируем предпросмотр
-    let previewText = "📋 *Предпросмотр постов:*\n\n";
-    results.forEach(res => {
-      previewText += `📍 *${res.type}: ${res.title}*\n---\n${res.content}\n\n`;
-    });
+      // Сохраняем в сессию, чтобы потом отправить при подтверждении
+      ctx.session.draft.results = results;
 
-    await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
-    
+     /*
+      let previewText = "📋 *Предпросмотр постов:*\n\n";
+      results.forEach(res => {
+        previewText += `📍 *${res.type}: ${res.title}*\n---\n${res.content}\n\n`;
+      });
+      
     await ctx.reply(previewText, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
@@ -192,17 +235,68 @@ postModule.action('process_ai_start', async (ctx) => {
         [Markup.button.callback('🔄 Перегенерировать', 'process_ai_start')],
         [Markup.button.callback('❌ Отмена', 'cancel_post')]
       ])
-    });
-
+    });*/
+    
+  }
+  await ctx.telegram.deleteMessage(ctx.chat!.id, statusMessage.message_id);
+  await showAiPreview(ctx);
   } catch (error) {
     console.error('AI Error:', error);
     await ctx.reply('❌ Произошла ошибка при генерации контента. Попробуйте позже.');
   }
 });
 
+
+postModule.action('reprocess_ai', async (ctx) => {
+  // Очищаем старые результаты
+  if (ctx.session.draft.isMassMode) {
+    ctx.session.draft.massItems.forEach(item => item.results = []);
+  } else {
+    ctx.session.draft.results = [];
+  }
+  
+  await runAiGeneration(ctx);
+});
+
+postModule.action('mass_preview_all', async (ctx) => {
+  const { massItems } = ctx.session.draft;
+
+  if (!massItems || massItems.length === 0) {
+    return ctx.answerCbQuery('⚠️ Очередь пуста');
+  }
+
+  const previewText = generateMassPreviewText(massItems);
+
+  await ctx.editMessageText(previewText, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([
+      [Markup.button.callback('⬅️ Назад к статистике', 'process_ai_start')], // Вернет к итогам генерации
+      [Markup.button.callback('🗓️ Перейти к расписанию', 'process_post_datetime')],
+      [Markup.button.callback('❌ Очистить и отменить', 'cancel_post')]
+    ])
+  });
+  
+  await ctx.answerCbQuery();
+});
+
 postModule.action('cancel_post', async (ctx) => {
+  
   ctx.session.state = BotState.IDLE;
-  startEditPost(ctx);
+  ctx.session.draft = {
+    selectedPlatforms: []
+  };
+
+  // 2. Уведомляем пользователя через всплывающее уведомление
+  await ctx.answerCbQuery('🚫 Создание поста отменено');
+  // 3. Редактируем сообщение, превращая его в статус отмены
+  try {
+    await ctx.editMessageText('❌ **Действие отменено.**\nВсе временные данные и черновики удалены. Вы вернулись в главное меню.', {
+      parse_mode: 'Markdown'
+    });
+  } catch (e) {
+    // Если сообщение нельзя отредактировать (например, оно старое), просто отправляем новое
+    await ctx.reply('❌ Создание поста отменено. Возврат в меню.');
+  }
 })
 
 postModule.action('post_confirm', async (ctx) => {
@@ -213,12 +307,13 @@ postModule.action('post_confirm', async (ctx) => {
     intervalMs, 
     imageFileId, 
     imageSource,
+    massItems,
     rawText
   } = ctx.session.draft;
 
   console.log(`[Confirm] Сохраняю задачу. FileID в черновике: ${imageFileId}`);
 
-  if (!results || results.length === 0) {
+  if ((!results || results.length === 0) && massItems.length === 0) {
     return ctx.answerCbQuery('⚠️ Ошибка: данные поста утеряны.');
   }
   if (ctx.session.draft.isMassMode) {
@@ -317,7 +412,7 @@ postModule.action(/^freqmode_(.+)$/, (ctx) => {
   const freqmode = ctx.match[1];
   ctx.session.state = BotState.AWAITING_POST_PERIOD;
   ctx.session.draft.scheduleMode = freqmode;
-  ctx.reply('Введите интервал времени, через который пост может быть опубликован', PostKeyboards.mass_frequency());
+  ctx.reply('Выберите интервал времени, через который пост может быть опубликован или пришлите интервал в формате [число][m|h|d](например 1m - интервал 1 минута, 3h - 3 часа, 7d - 7 дней)', PostKeyboards.mass_frequency());
 })
 
 postModule.action(/^mfreq_(.+)$/, (ctx) => {
@@ -337,7 +432,7 @@ postModule.action(/^mfreq_(.+)$/, (ctx) => {
       ctx.session.draft.intervalValue = "7d";
       break;
     case "MONTH":
-      ctx.session.draft.intervalValue = "1m";
+      ctx.session.draft.intervalValue = "30d";
       break;
   }
   set_post_interval(ctx);
@@ -347,6 +442,10 @@ postModule.action(/^mfreq_(.+)$/, (ctx) => {
 
 // обработка сообщений пользователя
 postModule.on('message', async (ctx, next) => {
+
+  if (ctx.session.state === BotState.IDLE) {
+    return await ctx.reply("Выберите действие в меню ниже или нажмите /start:", PostKeyboards.getMainMenu());
+  }
 
   // в состоянии AWAITING_POST_TEXT(ожидание текста поста) - сохранение черновика и переход в состяние AWAITING_POST_DATETIME(настройки периодичности и времени отправления)
   if (ctx.session.state === BotState.AWAITING_POST_TEXT && 'text' in ctx.message){

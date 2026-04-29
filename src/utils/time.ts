@@ -1,6 +1,11 @@
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat.js';
+
+dayjs.extend(customParseFormat);
+
 // функция преобразования входной строки интервала в untixtime
 export function parseIntervalToMs(input: string): number | null {
-  const regex = /^(\d{1,4}+)\s?([m|h|d])$/i;
+  const regex = /^(\d{1,4})\s*([m|h|d])$/i;
   const match = input.toLowerCase().match(regex);
 
   if (!match) throw new Error('❌ Неверный формат! Напишите интервал как в примере: `2d(2 дня) или 3h(3 часа) или 1m(1 месяц)`');
@@ -27,7 +32,7 @@ export function parseFullDate(input: string): string {
   const match = input.match(dtRegex);
 
   if (!match) {
-    throw new Error('❌ Невервот так:ный формат! Напишите дату  `15.04.2026 14:30`');
+    throw new Error('❌ Неверный формат! Напишите дату  `15.04.2026 14:30`');
   }
 
   const [_, day, month, year, hour, minute] = match;
@@ -44,4 +49,26 @@ export function parseFullDate(input: string): string {
     throw new Error('❌ Время должно быть в будущем! Сейчас: ' + now.toLocaleString('ru-RU'));
   }
   return scheduledDate.toISOString();
+}
+
+export function parseUserDateTime(input: string): string | null {
+
+
+  const nowInSaintPetersburg = dayjs().add(3, 'hour');
+
+  const currentYear = dayjs().year();
+  const fullInput = `${input}.${currentYear}`;
+  const parsedDate = dayjs(fullInput, "DD.MM HH:mm.YYYY", true);
+
+  if (!parsedDate.isValid()) {
+    throw new Error('⚠️ Неверный формат! Используй: ДД.ММ ЧЧ:ММ (например, 28.04 15:30)');
+  }
+
+  if (parsedDate.isBefore(nowInSaintPetersburg)) {
+    throw new Error('❌ Ошибка: нельзя запланировать пост в прошлом. Укажи время в будущем.');
+  }
+
+  const utcDate = parsedDate.subtract(3, 'hour').toISOString();
+  return utcDate;
+
 }
