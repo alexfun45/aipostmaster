@@ -263,7 +263,6 @@ export async function runAiGeneration(ctx: any) {
       }
       const updatedMassItems = JSON.parse(JSON.stringify(massItems));
       ctx.session.draft = Object.assign({}, ctx.session.draft, { massItems: updatedMassItems });
-      console.log('✅ Данные записаны в сессию:', ctx.session.draft.massItems);
     } else {
       const results = [];
       for (const platformId of selectedPlatforms) {
@@ -288,7 +287,6 @@ export async function runAiGeneration(ctx: any) {
 export function generateMassPreviewText(ctx): string {
   let text = "📊 *Предпросмотр адаптированных постов*\n\n";
   const massItems = ctx.session.draft?.massItems;
-  console.log('PREVIEW DEBUG:', massItems);
   massItems.forEach((item, index) => {
     // Берем контент из первого результата (обычно это основная платформа)
     // Если ИИ еще не отработал, берем исходный raw-текст

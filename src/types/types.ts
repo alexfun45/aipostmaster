@@ -37,7 +37,9 @@ export const BotState = {
   AWAITING_POST_IMAGE_UPLOAD: 'AWAITING_POST_IMAGE_UPLOAD',
   AWAITING_POST_IMAGE_PROMPT: 'AWAITING_POST_IMAGE_PROMPT',
   AWAITING_RANDOM_INTERVAL_DATETIME: 'AWAITING_RANDOM_INTERVAL_DATETIME',
-  AWAITING_POST_PERIOD: 'AWAITING_POST_PERIOD'
+  AWAITING_POST_PERIOD: 'AWAITING_POST_PERIOD',
+  AWAITING_CHANNEL_VK_ID: 'AWAITING_CHANNEL_VK_ID',
+  AWAITING_API_KEY: 'AWAITING_API_KEY'
 } as const
 
 export type BotState = typeof BotState[keyof typeof BotState];
@@ -95,9 +97,9 @@ export interface PostDraft {
 type typeBotState = typeof BotState[keyof typeof BotState];
 
 export interface UserPlatform {
-  type: AvailableSocialPlatform;
-  internalId: string;    // ID в самой соцсети (например, -100...)
-  title: string;         // Название (например, "Мой лайфстайл блог")
+  type: SocialPlatform;
+  internalId?: string;    // ID в самой соцсети (например, -100...)
+  title?: string;         // Название (например, "Мой лайфстайл блог")
   accessToken?: string;  // Токен (нужен для VK/Twitter, для TG не нужен)
   isActive: boolean;
 }
@@ -106,6 +108,7 @@ export interface botContext extends Context {
   session: {
     platforms: UserPlatform[],
     state: typeBotState;
+    currentSaveGroup: string;
     draft?: PostDraft;
   }
 }

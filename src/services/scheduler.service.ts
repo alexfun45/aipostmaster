@@ -2,9 +2,12 @@ import { Telegraf } from 'telegraf';
 import Redis from 'redis';
 import type { botContext } from '../types/types.ts';
 import AIContentService from '../services/aiContentMaker.ts'
+import {VKPoster} from '../providers/vkProvider.ts'
+import axios from 'axios';
 import 'dotenv/config'
 
 const aiService = new AIContentService();
+const vk_poster = new VKPoster();
 
 export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
   setInterval(async () => {
@@ -95,6 +98,13 @@ async function executeTask(bot: any, task: any) {
           });
         }
       }
+      else if (res.type === 'VK') {
+        let image_link = null;
+        if (imageFileId)
+          image_link = await bot.telegram.getFileLink(imageFileId);
+        await vk_poster.post();
+        //await postToVkWall(res.content, res.platformId, res.accessToken, image_link);
+      }
       console.log(`✅ Отправлено в ${res.type}`);
     } catch (e) {
       if (e.description?.includes('can\'t parse entities')) {
@@ -113,7 +123,7 @@ async function executeTask(bot: any, task: any) {
 }
 
 async function postToVkWall(message: string, ownerId: string, accessToken: string) {
-  // 1. Очищаем текст от HTML-тегов, так как ВК их не поддерживает
+  // 1. Очищаем текст от HTML-тегов
   const cleanMessage = message.replace(/<\/?[^>]+(>|$)/g, "");
 
   const url = 'https://api.vk.com/method/wall.post';
