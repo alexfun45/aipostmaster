@@ -85,7 +85,7 @@ export interface PostDraft {
   imageFileId?: string; // Если загрузил пользователь
   imageUrl?: string;    // Если сгенерировал ИИ
   imagePrompt?: string; // Промпт для генерации
-  selectedPlatforms: string[];
+  selectedPlatforms?: string[];
   frequency?: PostFreqType;
   intervalValue?: string; 
   intervalMs?: string | number;
@@ -148,13 +148,5 @@ export interface MySessionData {
 
 export interface botSession {
   state: typeBotState;
-  draft?: {
-    platform: string;
-    text?: string;
-    targetId?: string;
-    imageSource?: 'UPLOAD' | 'AI' | 'NONE'; // Откуда картинка
-    imageFileId?: string; // Если загрузил пользователь
-    imageUrl?: string;    // Если сгенерировал ИИ
-    imagePrompt?: string; // Промпт для генерации
-  };
+  draft?: PostDraft
 }
