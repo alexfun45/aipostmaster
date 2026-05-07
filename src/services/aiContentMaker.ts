@@ -1,9 +1,9 @@
 import 'dotenv/config'
 import { ChatOpenAI } from "@langchain/openai"
 import { PromptTemplate } from '@langchain/core/prompts'
-import {AvailableSocialPlatform} from '../types/types.ts'
-import type {SocialPlatform} from '../types/types.ts'
-import type {SocialPlatformType} from '../types/types.ts'
+import {AvailableSocialPlatform} from '../types/types.js'
+import type {SocialPlatform} from '../types/types.js'
+import type {SocialPlatformType} from '../types/types.js'
 
 
 export class AIContentService {

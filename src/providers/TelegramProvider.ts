@@ -1,8 +1,8 @@
 import { Telegraf } from 'telegraf';
-import {SocialPlatform, PostContent, IPoster} from '../types/types.ts'
+import type {SocialPlatform, PostContent, IPoster, AvailableSocialPlatform} from '../types/types.js'
 
 export class TelegramPoster implements IPoster {
-  platform = SocialPlatform.TELEGRAM;
+  platform: SocialPlatform = 'TELEGRAM';
   private bot: Telegraf;
 
   constructor(token: string) {

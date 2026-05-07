@@ -1,11 +1,10 @@
 import { Composer } from 'telegraf';
-import type { botContext } from '../types/types.ts'
-import {BotState} from '../types/types.ts'
+import type { botContext, PostDraft, PostFreqType} from '../types/types.js'
+import {BotState, PostFrequency} from '../types/types.js'
 import telegraf from 'telegraf';
-import AIContentService from '../services/aiContentMaker.ts'
-
-import {PostKeyboards} from '../keyboards/post.kb.ts'
-import {startEditPost, handle_post_period, handle_post_text, showAiPreview, runAiGeneration, generateMassPreviewText, set_post_interval, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.ts'
+import AIContentService from '../services/aiContentMaker.js'
+import {PostKeyboards} from '../keyboards/post.kb.js'
+import {startEditPost, handle_post_period, handle_post_text, showAiPreview, runAiGeneration, generateMassPreviewText, set_post_interval, handle_interval_execution, setInternalTask, handle_generate_image, pushCurrentItemToMass, scheduleMassQueue} from '../logic/post.logic.js'
 
 const postModule = new Composer<botContext>();
 const { Telegraf, Markup, session } = telegraf;
@@ -59,7 +58,7 @@ postModule.hears('📊 Активные рассылки', async (ctx) => {
   const tasks = ctx.session.activeTasks || [];
   
   // Фильтруем только те, что еще не выполнены или цикличны
-  const pendingTasks = tasks.filter(t => t.status === 'PENDING');
+  const pendingTasks: PostDraft[] = tasks.filter((t: PostDraft) => t.status === 'PENDING');
 
   if (pendingTasks.length === 0) {
     return ctx.reply('У вас пока нет активных запланированных рассылок. Создайте новый пост!');
@@ -100,7 +99,7 @@ postModule.hears('📊 Активные рассылки', async (ctx) => {
 
 
 postModule.action(/^freq_(.+)$/, async (ctx) => {
-  const freq = ctx.match[1];
+  const freq = ctx.match[1] as PostFreqType;
   ctx.session.draft.frequency = freq;
   await ctx.answerCbQuery();
 
@@ -247,7 +246,7 @@ postModule.action('post_confirm', async (ctx) => {
     await scheduleMassQueue(ctx);
   } else {
     // Создаем объект задачи
-    const newTask = {
+    const newTask: PostDraft = {
       id: Date.now().toString(), // Уникальный ID задачи
       userId: ctx.from!.id,
       results, // Массив адаптированных текстов
@@ -259,7 +258,7 @@ postModule.action('post_confirm', async (ctx) => {
       imageSource: imageSource || 'NONE',
       scheduledAt: scheduledAt ? new Date(scheduledAt).getTime() : Date.now(),
       status: 'PENDING',
-      createdAt: Date.now()
+      //createdAt: Date.now()
     };
 
     // Сохраняем в список активных задач пользователя
@@ -447,7 +446,7 @@ postModule.action(/^delete_task_(.+)$/, async (ctx) => {
   const taskId = ctx.match[1];
   const tasks = ctx.session.activeTasks || [];
 
-  const taskIndex = tasks.findIndex(t => t.id === taskId);
+  const taskIndex = tasks.findIndex((t: PostDraft) => t.id === taskId);
 
   if (taskIndex > -1) {
     // Удаляем задачу из массива

@@ -23,7 +23,7 @@ export interface PostContent {
 
 export interface IPoster {
   platform: SocialPlatform;
-  post(content: PostContent): Promise<boolean>;
+  //post(content: PostContent): Promise<boolean>;
 }
 
 export const BotState = {
@@ -54,11 +54,13 @@ export const PostFrequency = {
 
 export type PostFrequency = typeof PostFrequency[keyof typeof PostFrequency];
 
+export type PostFreqType = 'ONCE' | 'INTERVAL' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+
 export interface MassDraftItem {
   text: string;
   platformId: string;
   imageFileId?: string;
-  results: result_type[]
+  results: UserPlatform[]
 }
 
 type FREQ_MODE_TYPE = 'REGULAR' | 'RANDOM';
@@ -69,7 +71,11 @@ type result_type = {
   content: string
 }
 
+export type STATUS_TYPES = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+
 export interface PostDraft {
+  id?: string;
+  userId?: number;
   rawText?: string;
   text?: string;
   isDynamic?: boolean;
@@ -80,13 +86,14 @@ export interface PostDraft {
   imageUrl?: string;    // Если сгенерировал ИИ
   imagePrompt?: string; // Промпт для генерации
   selectedPlatforms: string[];
-  frequency?: PostFrequency | 'string';
+  frequency?: PostFreqType;
   intervalValue?: string; 
   intervalMs?: string | number;
   scheduleMode?: string; // режим выбора времени при массовом автопостинге(REGUAL - в одно время или RANDOM - в случайное)
-  scheduledAt?: string;
+  scheduledAt?: number;
   massItems?: MassDraftItem[]; 
-  results?: result_type[];
+  status?: STATUS_TYPES;
+  results?: UserPlatform[];
   isMassMode?: boolean;
   currentItem?: {
     text: string;
@@ -100,17 +107,43 @@ export interface UserPlatform {
   type: SocialPlatform;
   internalId?: string;    // ID в самой соцсети (например, -100...)
   title?: string;         // Название (например, "Мой лайфстайл блог")
+  content?: string;
   accessToken?: string;  // Токен (нужен для VK/Twitter, для TG не нужен)
   isActive: boolean;
+}
+
+
+
+export interface ITask {
+  id: string,
+  userId: number,
+  results: UserPlatform[],
+  imageFileId: string | null,
+  imageSource: string,
+  created_at: string,
+  rawText?: string,
+  scheduledAt: string,
+  intervalMs?: number,
+  isDynamic: boolean,
+  status: STATUS_TYPES,
+  frequency: string
 }
 
 export interface botContext extends Context {
   session: {
     platforms: UserPlatform[],
+    activeTasks: PostDraft[] | null,
     state: typeBotState;
     currentSaveGroup: string;
     draft?: PostDraft;
   }
+}
+
+export interface MySessionData {
+  state: BotState;
+  platforms: UserPlatform[];
+  currentSaveGroup: string;
+  draft?: PostDraft;
 }
 
 export interface botSession {

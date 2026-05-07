@@ -1,5 +1,5 @@
 import { Telegraf } from 'telegraf';
-import type {SocialPlatform, PostContent, IPoster} from '../types/types.ts'
+import type {SocialPlatform, PostContent, IPoster} from '../types/types.js'
 import axios from 'axios';
 import FormData from 'form-data';
 
@@ -7,10 +7,11 @@ export class VKPoster implements IPoster {
 
   private owner_id: string;
   private api_key: string;
+  platform: SocialPlatform = 'VK';
 
-  constructor(owner_id: string, api_key: string) {
-    this.owner_id = owner_id;
-    this.api_key = api_key;
+  constructor() {
+    //this.owner_id = owner_id;
+    //this.api_key = api_key;
   }
 
   async uploadPhotoToVk(imageBuffer: Buffer) {
@@ -18,6 +19,8 @@ export class VKPoster implements IPoster {
       // Шаг 1: Получаем URL для загрузки
       // Важно: owner_id для этого метода пишется БЕЗ минуса
       const cleanOwnerId = this.owner_id.replace('-', '');
+      console.log('cleanOwnerId', cleanOwnerId);
+      console.log('access_token', this.api_key);
       const serverResponse = await axios.get('https://api.vk.com/method/photos.getWallUploadServer', {
         params: {
           group_id: cleanOwnerId,
@@ -25,7 +28,11 @@ export class VKPoster implements IPoster {
           v: '5.131'
         }
       });
-  
+      
+      if (serverResponse.data.error) {
+        console.error('Ошибка API VK при получении сервера:', serverResponse.data.error);
+        throw new Error(`VK API Error: ${serverResponse.data.error.error_msg}`);
+      }
       const uploadUrl = serverResponse.data.response.upload_url;
   
       // Шаг 2: Загружаем файл на сервер VK
@@ -63,7 +70,8 @@ export class VKPoster implements IPoster {
   async post(message: string, ownerId: string, accessToken: string, image_link) {
     // 1. Очищаем текст от HTML-тегов
     const cleanMessage = message.replace(/<\/?[^>]+(>|$)/g, "");
-    
+    this.owner_id = ownerId;
+    this.api_key = accessToken;
     const url = 'https://api.vk.com/method/wall.post';
     
     // Параметры запроса

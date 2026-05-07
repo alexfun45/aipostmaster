@@ -1,15 +1,16 @@
 import { Telegraf } from 'telegraf';
-import Redis from 'redis';
-import type { botContext } from '../types/types.ts';
-import AIContentService from '../services/aiContentMaker.ts'
-import {VKPoster} from '../providers/vkProvider.ts'
+import { createClient } from 'redis';
+import type { botContext } from '../types/types.js';
+import AIContentService from '../services/aiContentMaker.js'
+import {VKPoster} from '../providers/vkProvider.js'
 import axios from 'axios';
 import 'dotenv/config'
 
+type RedisClient = ReturnType<typeof createClient>;
 const aiService = new AIContentService();
 const vk_poster = new VKPoster();
 
-export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
+export function startScheduler(bot: Telegraf<botContext>, redis: RedisClient) {
   setInterval(async () => {
     try {
       // Ищем все ключи сессий. В Redis они обычно лежат с префиксом
@@ -24,7 +25,7 @@ export function startScheduler(bot: Telegraf<botContext>, redis: Redis) {
         const rawData = await redis.get(key);
         if (!rawData) continue;
 
-        const sessionData = JSON.parse(rawData);
+        const sessionData = JSON.parse(rawData.toString());
         if (!sessionData.activeTasks || sessionData.activeTasks.length === 0) continue;
 
         let isChanged = false;
@@ -102,7 +103,8 @@ async function executeTask(bot: any, task: any) {
         let image_link = null;
         if (imageFileId)
           image_link = await bot.telegram.getFileLink(imageFileId);
-        await vk_poster.post();
+        console.log(`отправляю задачу`, res);
+        await vk_poster.post(res.content, res.platformId, res.accessToken, image_link);
         //await postToVkWall(res.content, res.platformId, res.accessToken, image_link);
       }
       console.log(`✅ Отправлено в ${res.type}`);

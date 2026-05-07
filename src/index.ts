@@ -3,12 +3,12 @@ import 'dotenv/config'
 import telegraf from 'telegraf';
 import { Redis } from '@telegraf/session/redis';
 //import { initRedis } from './services/redis.service.ts';
-import {BotState} from './types/types.ts'
-import type { botSession, botContext } from './types/types.js';
+import {BotState} from './types/types.js'
+import type { botSession, botContext, MySessionData } from './types/types.js';
 import { createClient } from 'redis';
-import setupModule from './handlers/setup.ts'
-import postModule from './handlers/posts.ts'
-import {startScheduler} from './services/scheduler.service.ts'
+import setupModule from './handlers/setup.js'
+import postModule from './handlers/posts.js'
+import {startScheduler} from './services/scheduler.service.js'
 
 const { Telegraf, Markup, session } = telegraf;
 
@@ -26,14 +26,13 @@ connectedClient.on('error', err => console.log('Redis Client Error', err));
 connectedClient.on('connect', () => console.log('Redis Connected!'));
 //await connectedClient.connect();
 const store = Redis({
-    client: connectedClient,
-    ttl: 0
+    client: connectedClient
     } 
   );
 
 const bot = new Telegraf<botContext>(process?.env?.TELEGRAM_BOT_TOKEN || "");
 bot.use(session({ 
-  store,
+  store: store as any,
   getSessionKey: (ctx) => {
     if (ctx.from) {
       return `${ctx.from.id}:${ctx.from.id}`;
@@ -42,11 +41,13 @@ bot.use(session({
   },
   defaultSession: () => ({ 
     state: BotState.IDLE,
-    platforms: []
+    platforms: [],
+    currentSaveGroup: '',
+    activeTasks: null
   }) 
 }));
 
-bot.use(async (ctx, next) => {
+bot.use(async (ctx: any, next) => {
   console.log(`Получено сообщение: ${ctx.message?.text || ctx.callbackQuery?.data}`);
   console.log(`Текущий стейт: ${ctx.session?.state}`);
   return next();

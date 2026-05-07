@@ -1,6 +1,6 @@
 import { Composer } from 'telegraf';
-import type { botContext, UserPlatform} from '../types/types.ts'
-import {BotState} from '../types/types.ts'
+import type { botContext, UserPlatform} from '../types/types.js'
+import {BotState} from '../types/types.js'
 import axios from 'axios';
 import telegraf from 'telegraf';
 
@@ -29,7 +29,7 @@ async function setup(ctx: botContext){
       ])
     );
   }
-  console.log('площадки', platforms);
+
   const buttons = platforms.map(p => [
     Markup.button.callback(
       `${p.type === 'TELEGRAM' ? '🔹telegram:' : '🔸vk:'} ${p.title || p.internalId}(${(p.isActive)?'активна':'остановлена'})`, 
@@ -48,6 +48,7 @@ setupModule.action('add_platform_choice', async (ctx) => {
 });
 
 const getPlatformManagementMenu = (platform: any) => {
+  console.log('platform', platform);
   const platformId = platform.internalId;
   const statusIcon = platform.isActive ? '🟢' : '🔴';
   const statusText = platform.isActive ? 'Активна' : 'Остановлена';
@@ -121,7 +122,7 @@ setupModule.action('setup_tg', async (ctx: botContext) => {
   );
 });
 
-setupModule.action('setup_vk', async (ctx: botCOntext) => {
+setupModule.action('setup_vk', async (ctx: botContext) => {
   await ctx.answerCbQuery();
 
   ctx.session.state = BotState.AWAITING_CHANNEL_VK_ID
@@ -135,10 +136,10 @@ setupModule.action('setup_vk', async (ctx: botCOntext) => {
 });
 
 setupModule.on('my_chat_member', async (ctx: botContext) => {
-  const chat = ctx?.myChatMember.chat;
+  const chat:any = ctx?.myChatMember.chat;
   if (ctx?.myChatMember.new_chat_member.status === 'administrator') {
     await ctx.telegram.sendMessage(ctx?.myChatMember.from.id, `✅ Вижу, вы добавили меня в канал "${chat?.title}" (ID: ${chat.id})`);
-    const channelInfo = {
+    const channelInfo: UserPlatform = {
       type: 'TELEGRAM',
       internalId: chat.id.toString(),
       title: chat?.title,
@@ -199,13 +200,14 @@ async function save_vk_api_key(ctx: botContext, api_key: string){
     console.log('Добавляю api key группы vk', api_key);
     console.log('id группы', ctx.session.currentSaveGroup);
         const groupName = await getVkGroupName(ctx.session.currentSaveGroup, api_key);
-        const channelInfo = {
+        const channelInfo: UserPlatform = {
           type: 'VK',
           internalId: ctx.session.currentSaveGroup,
           isActive: true,
           title: groupName,
           accessToken: api_key
         };
+        console.log('Добавил группу', channelInfo);
         ctx.session.platforms.push(channelInfo);
         ctx.session.currentSaveGroup = null;
         ctx.session.state = BotState.IDLE;
@@ -213,8 +215,8 @@ async function save_vk_api_key(ctx: botContext, api_key: string){
 }
 
 // обработка сообщений пользователя
-setupModule.on('message', async (ctx, next) => {
-  const text = ctx.message?.text;
+setupModule.on('message', async (ctx: any, next) => {
+  const text:any = ctx.message?.text;
   if (ctx.session.state === BotState.AWAITING_CHANNEL_VK_ID && 'text' in ctx.message) {
     return await save_vk_group_id(ctx, text);
   }

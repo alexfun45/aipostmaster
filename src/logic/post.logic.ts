@@ -1,11 +1,11 @@
-import type { botContext } from '../types/types.ts'
-import {BotState} from '../types/types.ts'
+import type { botContext } from '../types/types.js'
+import {BotState} from '../types/types.js'
 import telegraf from 'telegraf';
 const { Telegraf, Markup, session } = telegraf;
-import { ImageAiService } from '../services/imageAi.service.ts';
-import {PostKeyboards} from '../keyboards/post.kb.ts'
-import {parseFullDate, parseIntervalToMs, parseUserDateTime} from '../utils/time.ts'
-import AIContentService from '../services/aiContentMaker.ts'
+import { ImageAiService } from '../services/imageAi.service.js';
+import {PostKeyboards} from '../keyboards/post.kb.js'
+import {parseFullDate, parseIntervalToMs, parseUserDateTime} from '../utils/time.js'
+import AIContentService from '../services/aiContentMaker.js'
 
 const aiService = new AIContentService();
 const imageAi = new ImageAiService();
@@ -17,7 +17,7 @@ export async function startEditPost(ctx: botContext){
   await ctx.reply('Пришлите текст поста или просто идею, а я помогу её оформить. ✨');
 }
 
-export async function handle_post_period(ctx: botContext){
+export async function handle_post_period(ctx: any){
   const dtText = ctx.message.text;
   let scheduledDate;
   try{
@@ -38,7 +38,7 @@ export async function handle_post_period(ctx: botContext){
 }
 
 // получение и сохранение текста поста
-export async function handle_post_text(ctx: botContext){
+export async function handle_post_text(ctx: any){
   const text = ctx.message?.text;
   if(!text) return ;
   
@@ -63,7 +63,7 @@ export async function handle_post_text(ctx: botContext){
   await ctx.reply('📝 Текст принят!\nТеперь выберите режим контента:', PostKeyboards.contentMode());
 }
 
-export async function handle_interval_execution(ctx: botContext){
+export async function handle_interval_execution(ctx: any){
   const minutes = parseInt(ctx.message.text);
 
   if (isNaN(minutes) || minutes <= 0) {
@@ -73,7 +73,7 @@ export async function handle_interval_execution(ctx: botContext){
   await setInternalTask(ctx, minutes);
 }
 
-export async function setIntervalTasks(ctx: botContext){
+export async function setIntervalTasks(ctx: any){
   const minutes = ctx.message.text;
   if (isNaN(minutes) || minutes <= 0) {
     return ctx.reply('⚠️ Пожалуйста, введите положительное число минут (например, 120).');
@@ -97,7 +97,7 @@ export async function setInternalTask(ctx: any, minutes: number){
 }
 
 // получение и установка интервала, в течение которого может быть опубликован следующий пост при массовом постинге
-export async function set_post_interval(ctx: botContext){
+export async function set_post_interval(ctx: any){
   try{
     ctx.session.draft.intervalMs = parseIntervalToMs(ctx.message.text);
     ctx.session.draft.frequency = ctx.message.text;
@@ -113,7 +113,7 @@ export async function set_post_interval(ctx: botContext){
   );
   }
 
-export async function handle_generate_image(ctx: botContext){
+export async function handle_generate_image(ctx: any){
   const prompt = ctx.message.text;
   ctx.session.draft.imagePrompt = prompt;
 
@@ -256,6 +256,7 @@ export async function runAiGeneration(ctx: any) {
           currentResults.push({
             platformId: platform.internalId,
             type: platform.type,
+            accessToken: platform.accessToken,
             content: adaptedText
           });
         }
@@ -269,7 +270,8 @@ export async function runAiGeneration(ctx: any) {
         const platform = allPlatforms.find(p => p.internalId === platformId);
         if (!platform) continue;
         const adaptedText = await aiService.adaptContent(rawText!, platform.type);
-        results.push({ platformId: platform.internalId, title: platform.title, type: platform.type, content: adaptedText });
+        console.log('добавлена платформа', platform);
+        results.push({ platformId: platform.internalId, title: platform.title, accessToken: platform.accessToken, type: platform.type, content: adaptedText });
       }
       ctx.session.draft.results = results;
     }
