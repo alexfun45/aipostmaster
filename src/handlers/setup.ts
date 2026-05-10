@@ -48,7 +48,6 @@ setupModule.action('add_platform_choice', async (ctx) => {
 });
 
 const getPlatformManagementMenu = (platform: any) => {
-  console.log('platform', platform);
   const platformId = platform.internalId;
   const statusIcon = platform.isActive ? '🟢' : '🔴';
   const statusText = platform.isActive ? 'Активна' : 'Остановлена';

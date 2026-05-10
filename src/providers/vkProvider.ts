@@ -19,13 +19,12 @@ export class VKPoster implements IPoster {
       // Шаг 1: Получаем URL для загрузки
       // Важно: owner_id для этого метода пишется БЕЗ минуса
       const cleanOwnerId = this.owner_id.replace('-', '');
-      console.log('cleanOwnerId', cleanOwnerId);
-      console.log('access_token', this.api_key);
+      console.log(`отправляю в группу ${cleanOwnerId} с access token ${this.api_key}`);
       const serverResponse = await axios.get('https://api.vk.com/method/photos.getWallUploadServer', {
         params: {
           group_id: cleanOwnerId,
           access_token: this.api_key,
-          v: '5.131'
+          v: '5.199'
         }
       });
       
@@ -53,7 +52,7 @@ export class VKPoster implements IPoster {
           photo,
           hash,
           access_token: this.api_key,
-          v: '5.131'
+          v: '5.199'
         }
       });
   

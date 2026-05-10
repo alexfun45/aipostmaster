@@ -43,13 +43,24 @@ export function startScheduler(bot: Telegraf<botContext>, redis: RedisClient) {
 
         // Если мы изменили статус задачи (выполнили или перенесли), сохраняем сессию обратно
         if (isChanged) {
+          const originalCount = sessionData.activeTasks.length;
+  
+          sessionData.activeTasks = sessionData.activeTasks.filter(
+            (task: any) => task.status !== 'COMPLETED'
+          );
+
+          const deletedCount = originalCount - sessionData.activeTasks.length;
+          if (deletedCount > 0) {
+            console.log(`[Scheduler] Удалено выполненных задач (ONCE): ${deletedCount}`);
+          }
+          
           await redis.set(key, JSON.stringify(sessionData));
         }
       }
     } catch (error) {
       console.error('[Scheduler Error]:', error);
     }
-  }, 30000);
+  }, 10000);
   //}, 60000); 
 }
 
@@ -104,7 +115,7 @@ async function executeTask(bot: any, task: any) {
         if (imageFileId)
           image_link = await bot.telegram.getFileLink(imageFileId);
         console.log(`отправляю задачу`, res);
-        await vk_poster.post(res.content, res.platformId, res.accessToken, image_link);
+        await vk_poster.post(res.content, res.platformId, process.env.VK_ACCESS_TOKEN, image_link);
         //await postToVkWall(res.content, res.platformId, res.accessToken, image_link);
       }
       console.log(`✅ Отправлено в ${res.type}`);
